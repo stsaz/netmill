@@ -1,0 +1,138 @@
+/** netmill: http-client: receive HTTP response
+2023, Simon Zolin */
+
+#include <http-client/client.h>
+#include <ffbase/mem-print.h>
+
+static int nml_orecv_open(nml_http_client *c)
+{
+	if (NULL == ffvec_alloc(&c->recv.buf, 4096, 1)) {
+		cl_warnlog(c, "no memory");
+		return NMLF_ERR;
+	}
+	c->recv.filter_index = c->conveyor.cur;
+	return NMLF_OPEN;
+}
+
+static void nml_orecv_close(nml_http_client *c)
+{
+	cl_timer_stop(c, &c->recv.timer);
+	ffvec_free(&c->recv.buf);
+	ffvec_free(&c->recv.body);
+}
+
+static void nml_orecv_read_expired(nml_http_client *c)
+{
+	cl_dbglog(c, "receive timeout");
+	c->timeout = 1;
+	c->wake(c);
+}
+
+static void nml_orecv_signal(nml_http_client *c)
+{
+	c->conveyor.cur = c->recv.filter_index;
+	c->wake(c);
+}
+
+static int nml_orecv_body(nml_http_client *c)
+{
+	ffvec *buf = &c->recv.body;
+
+	if (!buf->cap)
+		if (NULL == ffvec_alloc(buf, c->conf->receive.body_buf_size, 1))
+			return NMLF_ERR;
+	buf->len = 0;
+
+	int r = ffsock_recv_async(c->sk, buf->ptr + buf->len, buf->cap - buf->len, cl_kev_r(c));
+	cl_timer_stop(c, &c->recv.timer);
+	if (r < 0) {
+		if (fferr_last() == FFSOCK_EINPROGRESS) {
+			cl_timer(c, &c->recv.timer, -(int)c->conf->receive.timeout_msec, nml_orecv_read_expired, c);
+			cl_kev_r_async(c, nml_orecv_signal);
+			cl_dbglog(c, "receive from server: in progress");
+			return NMLF_ASYNC;
+		}
+		cl_syswarnlog(c, "ffsock_recv");
+		return NMLF_ERR;
+	}
+
+	buf->len += r;
+	c->recv.transferred += r;
+	cl_dbglog(c, "received from server: %u [%U]", r, c->recv.transferred);
+
+	if (c->log_level >= NML_LOG_DEBUG) {
+		uint n = ffmin(r, c->conf->debug_data_dump_len);
+		ffstr s = ffmem_alprint(buf->ptr + buf->len - r, n, FFMEM_PRINT_ZEROSPACE);
+		cl_dbglog(c, "\n%S", &s);
+		ffstr_free(&s);
+	}
+
+	if (r == 0) {
+		c->recv_fin = 1;
+		return NMLF_DONE;
+	}
+
+	ffstr_setstr(&c->output, buf);
+	return NMLF_FWD;
+}
+
+static int nml_orecv_process(nml_http_client *c)
+{
+	if (c->timeout) {
+		return NMLF_ERR;
+	}
+
+	if (c->response.status.len) {
+		return nml_orecv_body(c);
+	}
+
+	ffvec *buf = &c->recv.buf;
+
+	if (buf->len == c->conf->receive.max_buf) {
+		cl_warnlog(c, "receive.max_buf limit reached");
+		return NMLF_ERR;
+	}
+
+	if (0 == ffvec_unused(buf)
+		&& NULL == ffvec_grow(buf, c->conf->receive.hdr_buf_size, 1)) {
+		cl_warnlog(c, "no memory");
+		return NMLF_ERR;
+	}
+
+	int r = ffsock_recv_async(c->sk, buf->ptr + buf->len, buf->cap - buf->len, cl_kev_r(c));
+	cl_timer_stop(c, &c->recv.timer);
+	if (r < 0) {
+		if (fferr_last() == FFSOCK_EINPROGRESS) {
+			cl_timer(c, &c->recv.timer, -(int)c->conf->receive.timeout_msec, nml_orecv_read_expired, c);
+			cl_kev_r_async(c, nml_orecv_signal);
+			cl_dbglog(c, "receive from server: in progress");
+			return NMLF_ASYNC;
+		}
+		cl_syswarnlog(c, "ffsock_recv");
+		return NMLF_ERR;
+	}
+
+	buf->len += r;
+	c->recv.transferred += r;
+	cl_dbglog(c, "received from server: %u [%U]", r, c->recv.transferred);
+
+	if (c->log_level >= NML_LOG_DEBUG) {
+		uint n = ffmin(r, c->conf->debug_data_dump_len);
+		ffstr s = ffmem_alprint(buf->ptr + buf->len - r, n, FFMEM_PRINT_ZEROSPACE);
+		cl_dbglog(c, "\n%S", &s);
+		ffstr_free(&s);
+	}
+
+	if (r == 0) {
+		c->recv_fin = 1;
+		return NMLF_DONE;
+	}
+
+	ffstr_setstr(&c->output, buf);
+	return NMLF_FWD;
+}
+
+const struct nml_filter nml_filter_recv = {
+	(void*)nml_orecv_open, (void*)nml_orecv_close, (void*)nml_orecv_process,
+	"resp-recv"
+};

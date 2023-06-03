@@ -1,0 +1,5 @@
+<resources>
+	<string name="app_name">netmill</string>
+	<string name="action_settings">Settings</string>
+	<string name="b_start">Start Proxy Server</string>
+</resources>
