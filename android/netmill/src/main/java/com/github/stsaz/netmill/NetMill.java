@@ -12,14 +12,17 @@ class NetMill {
 
 	native void destroy();
 
-	int port = 8080;
-	boolean proxy;
-	String www_dir = "";
-	native int httpStart();
+	static class HttpServerOptions {
+		int port = 8080;
+		int workers = 1;
+		int io_workers = 1; // 0: don't use separate I/O threads
+		boolean proxy = true;
+		String www_dir = "";
+		String error = "";
+	}
+	native int httpStart(HttpServerOptions hso);
 
 	native int httpStop();
-
-	String error = "";
 
 	static {
 		System.loadLibrary("netmill");

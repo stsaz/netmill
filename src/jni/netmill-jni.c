@@ -2,19 +2,25 @@
 2023, Simon Zolin */
 
 #include <netmill.h>
-#include <FFOS/thread.h>
 #include <util/jni-helper.h>
-#include <ffbase/vector.h>
+#include <util/kcq.h>
+#include <FFOS/thread.h>
 #include <FFOS/ffos-extern.h>
+#include <ffbase/vector.h>
 #include <android/log.h>
 
 struct nml_jctx {
+	struct zzkcq kcq;
 	struct nml_http_server_conf sc;
-	nml_http_server *http_sv;
 	struct nml_address addrs[2];
-	ffthread th;
+	ffvec workers; // struct worker[]
 	uint log_android :1;
 	uint log_debug :1;
+};
+
+struct worker {
+	ffthread th;
+	nml_http_server *http_sv;
 };
 
 static JavaVM *jvm;
@@ -25,6 +31,45 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *_jvm, void *reserved)
 {
 	jvm = _jvm;
 	return JNI_VERSION_1_6;
+}
+
+static void workers_free(struct nml_jctx *c)
+{
+	struct worker *w;
+	FFSLICE_WALK(&c->workers, w) {
+		if (w->http_sv == NULL) continue;
+
+		nml_http_server_stop(w->http_sv);
+		ffthread_join(w->th, -1, NULL);  w->th = FFTHREAD_NULL;
+		nml_http_server_free(w->http_sv);  w->http_sv = NULL;
+	}
+	ffvec_free(&c->workers);
+}
+
+static int FFTHREAD_PROCCALL http_sv_thread(void *param)
+{
+	struct worker *w = param;
+	nml_http_server_run(w->http_sv);
+	return 0;
+}
+
+static int worker_start(struct worker *w, struct nml_jctx *c, struct nml_http_server_conf *sc)
+{
+	w->th = FFTHREAD_NULL;
+	w->http_sv = nml_http_server_new();
+	if (!!nml_http_server_conf(w->http_sv, sc))
+		return -1;
+	if (FFTHREAD_NULL == (w->th = ffthread_create(http_sv_thread, w, 0)))
+		return -1;
+	return 0;
+}
+
+static void ctx_destroy(struct nml_jctx *c)
+{
+	zzkcq_destroy(&c->kcq);  ffmem_zero_obj(&c->kcq);
+	workers_free(c);
+	nml_http_file_uninit(&c->sc);
+	ffstr_free(&c->sc.fs.www);
 }
 
 JNIEXPORT void JNICALL
@@ -42,8 +87,7 @@ Java_com_github_stsaz_netmill_NetMill_destroy(JNIEnv *env, jobject thiz)
 {
 	jclass jc = jni_class_obj(thiz);
 	struct nml_jctx *c = (void*)jni_obj_long(thiz, jni_field(jc, "ctx", JNI_TLONG));
-	nml_http_server_free(c->http_sv);
-	nml_http_file_uninit(&c->sc);
+	ctx_destroy(c);
 	ffmem_free(c);
 	jni_obj_long_set(thiz, jni_field(jc, "ctx", JNI_TLONG), (jlong)NULL);
 }
@@ -86,61 +130,84 @@ static void log_bridge(void *obj, ffuint level, const char *ctx, const char *id,
 	va_end(va);
 }
 
-static int FFTHREAD_PROCCALL http_sv_thread(void *param)
-{
-	struct nml_jctx *c = param;
-	nml_http_server_run(c->http_sv);
-	return 0;
-}
-
 JNIEXPORT jint JNICALL
-Java_com_github_stsaz_netmill_NetMill_httpStart(JNIEnv *env, jobject thiz)
+Java_com_github_stsaz_netmill_NetMill_httpStart(JNIEnv *env, jobject thiz, jobject jhso)
 {
 	int rc = -1;
 	jclass jc = jni_class_obj(thiz);
 	struct nml_jctx *c = (void*)jni_obj_long(thiz, jni_field(jc, "ctx", JNI_TLONG));
-	uint proxy = jni_obj_bool(thiz, jni_field(jc, "proxy", JNI_TBOOL));
-	uint port = jni_obj_int(thiz, jni_field(jc, "port", JNI_TINT));
-	jstring jwww_dir = jni_obj_jo(thiz, jni_field(jc, "www_dir", JNI_TSTR));
+
+	jclass jc_hso = jni_class_obj(jhso);
+	uint proxy = jni_obj_bool(jhso, jni_field(jc_hso, "proxy", JNI_TBOOL));
+	uint port = jni_obj_int(jhso, jni_field(jc_hso, "port", JNI_TINT));
+	uint workers = jni_obj_int(jhso, jni_field(jc_hso, "workers", JNI_TINT));
+	uint io_workers = jni_obj_int(jhso, jni_field(jc_hso, "io_workers", JNI_TINT));
+	jstring jwww_dir = jni_obj_jo(jhso, jni_field(jc_hso, "www_dir", JNI_TSTR));
 	const char *www_dir = (char*)jni_sz_js(jwww_dir);
 
-	nml_http_server_conf(NULL, &c->sc);
+	if (workers == 0) {
+		jni_obj_sz_set(env, jhso, jni_field(jc_hso, "error", JNI_TSTR), "invalid config parameter");
+		goto end;
+	}
+
+	if (io_workers != 0
+		&& 0 != zzkcq_create(&c->kcq, io_workers, 200, /*polling*/ 0))
+		goto end;
+
+	if (0 != zzkcq_start(&c->kcq))
+		goto end;
+
+	struct nml_http_server_conf *sc = &c->sc;
+	nml_http_server_conf(NULL, sc);
 
 	if (c->log_debug)
-		c->sc.log_level = NML_LOG_DEBUG;
+		sc->log_level = NML_LOG_DEBUG;
 #ifdef FF_DEBUG
-	c->sc.log_level = NML_LOG_EXTRA;
+	sc->log_level = NML_LOG_EXTRA;
 #endif
-	c->sc.log = log_bridge;
-	c->sc.log_obj = c;
+	sc->log = log_bridge;
+	sc->log_obj = c;
 
 	c->addrs[0].port = port;
-	c->sc.server.listen_addresses = c->addrs;
-	c->sc.server.max_connections = 200;
-	c->sc.server.events_num = 100;
+	sc->server.listen_addresses = c->addrs;
+	sc->server.max_connections = 200;
+	sc->server.events_num = 100;
+	sc->server.reuse_port = 1;
+
+	ffstr_dupz(&sc->fs.www, www_dir);
+
+	if (io_workers != 0) {
+		sc->kcq_sq = c->kcq.sq;
+		sc->kcq_sq_sem = c->kcq.sem;
+	}
 
 	ffvec content_types = {};
 	ffvec_addsz(&content_types, "text/html	html\r\n");
-	nml_http_file_init(&c->sc, *(ffstr*)&content_types);
+	nml_http_file_init(sc, *(ffstr*)&content_types);
 
-	c->sc.filters = nml_http_server_filters;
+	sc->filters = nml_http_server_filters;
 	if (proxy)
-		c->sc.filters = nml_http_server_filters_proxy;
+		sc->filters = nml_http_server_filters_proxy;
 
-	c->http_sv = nml_http_server_new();
-	if (!!nml_http_server_conf(c->http_sv, &c->sc)) {
-		char *e = ffsz_allocfmt("%E", fferr_last());
-		jni_obj_sz_set(env, thiz, jni_field(jc, "error", JNI_TSTR), e);
-		ffmem_free(e);
-		nml_http_server_free(c->http_sv);  c->http_sv = NULL;
+	if (NULL == ffvec_zallocT(&c->workers, workers, struct worker))
 		goto end;
-	}
-	if (FFTHREAD_NULL == (c->th = ffthread_create(http_sv_thread, c, 0))) {
-		goto end;
+	c->workers.len = workers;
+
+	struct worker *w;
+	FFSLICE_WALK(&c->workers, w) {
+		if (!!worker_start(w, c, sc)) {
+			char *e = ffsz_allocfmt("%E", fferr_last());
+			jni_obj_sz_set(env, jhso, jni_field(jc_hso, "error", JNI_TSTR), e);
+			ffmem_free(e);
+			goto end;
+		}
 	}
 	rc = 0;
 
 end:
+	if (rc != 0) {
+		ctx_destroy(c);
+	}
 	jni_sz_free(www_dir, jwww_dir);
 	return rc;
 }
@@ -151,10 +218,7 @@ Java_com_github_stsaz_netmill_NetMill_httpStop(JNIEnv *env, jobject thiz)
 	int r = -1;
 	jclass jc = jni_class_obj(thiz);
 	struct nml_jctx *c = (void*)jni_obj_long(thiz, jni_field(jc, "ctx", JNI_TLONG));
-	nml_http_server_stop(c->http_sv);
-	ffthread_join(c->th, -1, NULL);  c->th = FFTHREAD_NULL;
-	nml_http_server_free(c->http_sv);
-	c->http_sv = NULL;
+	ctx_destroy(c);
 	r = 0;
 	return r;
 }

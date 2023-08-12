@@ -1,20 +1,28 @@
+/** netmill
+2023, Simon Zolin */
+
 package com.github.stsaz.netmill;
 
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.Manifest;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
-
-import androidx.appcompat.app.AppCompatActivity;
-
-import android.view.View;
-
-import com.github.stsaz.netmill.databinding.ActivityMainBinding;
-
+import android.os.Environment;
+import android.provider.Settings;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import com.github.stsaz.netmill.databinding.ActivityMainBinding;
 
 public class MainActivity extends AppCompatActivity {
 
 	private ActivityMainBinding binding;
-	private NetMillAndroid nml;
+	private Core core;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -25,15 +33,16 @@ public class MainActivity extends AppCompatActivity {
 
 		setSupportActionBar(binding.toolbar);
 
-		binding.buttonStart.setOnClickListener((v) -> server_start());
+		binding.buttonStart.setOnClickListener((v) -> server_start_stop());
 
-		nml = new NetMillAndroid();
-		nml.init();
+		core = Core.init_once(this);
+		update();
+		init_system();
 	}
 
 	@Override
 	public void onDestroy() {
-		nml.destroy();
+		core.unref();
 		super.onDestroy();
 	}
 
@@ -59,18 +68,63 @@ public class MainActivity extends AppCompatActivity {
 		return super.onOptionsItemSelected(item);
 	}
 
-	private void server_start() {
-		if (nml.http_server_active) {
-			nml.httpStop();
-			binding.buttonStart.setText("Start");
-			binding.textviewStatus.setText("");
+	/** Process the result of requestPermissions() */
+	public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+		super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+	}
+
+	/** Process the result of startActivityForResult() */
+	public void onActivityResult(int requestCode, int resultCode, Intent data) {
+		super.onActivityResult(requestCode, resultCode, data);
+	}
+
+	private static final int REQUEST_PERM_READ_STORAGE = 1;
+	private static final int REQUEST_STORAGE_ACCESS = 1;
+
+	/** Request system permissions */
+	private void init_system() {
+		String[] perms = new String[]{
+			Manifest.permission.READ_EXTERNAL_STORAGE,
+			Manifest.permission.WRITE_EXTERNAL_STORAGE,
+		};
+		for (String p : perms) {
+			if (ActivityCompat.checkSelfPermission(this, p) != PackageManager.PERMISSION_GRANTED) {
+				ActivityCompat.requestPermissions(this, perms, REQUEST_PERM_READ_STORAGE);
+				break;
+			}
+		}
+
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+			if (!Environment.isExternalStorageManager()) {
+				Intent it = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+					Uri.parse("package:" + BuildConfig.APPLICATION_ID));
+				ActivityCompat.startActivityForResult(this, it, REQUEST_STORAGE_ACCESS, null);
+			}
+		}
+	}
+
+	private void update() {
+		binding.textviewStatus.setText(core.nml.status);
+
+		String s = getString(R.string.b_start);
+		if (core.nml.http_server_active)
+			s = "Stop";
+		binding.buttonStart.setText(s);
+	}
+
+	private void server_start_stop() {
+		if (core.nml.http_server_active) {
+			core.nml.httpStop();
+			core.nml.status = "";
+			update();
+			stopService(new Intent(this, Svc.class));
 			return;
 		}
 
-		int r = nml.httpStart();
-		binding.textviewStatus.setText(nml.status);
+		int r = core.nml.httpStart();
+		update();
 		if (r == 0) {
-			binding.buttonStart.setText("Stop");
+			startService(new Intent(this, Svc.class));
 		}
 	}
 }
