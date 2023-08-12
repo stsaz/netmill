@@ -7,6 +7,8 @@ FFOS := $(ROOT_DIR)/ffos
 
 include $(FFBASE)/test/makeconf
 
+SUBMAKE := $(MAKE) -f $(firstword $(MAKEFILE_LIST))
+
 EXE := netmill
 APP_DIR := netmill-0
 ifeq "$(OS)" "windows"
@@ -42,9 +44,9 @@ LINKFLAGS += $(LINKFLAGS_USER)
 
 default: $(EXE)
 ifneq "$(DEBUG)" "1"
-	$(MAKE) -f $(firstword $(MAKEFILE_LIST)) strip-debug
+	$(SUBMAKE) strip-debug
 endif
-	$(MAKE) -f $(firstword $(MAKEFILE_LIST)) app
+	$(SUBMAKE) app
 
 $(EXE): main.o \
 		server.o \

@@ -28,6 +28,7 @@ static void conf_init(struct nml_http_client_conf *conf)
 	conf->receive.max_buf = 64*1024;
 	conf->receive.body_buf_size = 64*1024;
 	conf->debug_data_dump_len = 80;
+	conf->method = FFSTR_Z("GET");
 }
 
 int nml_http_client_conf(nml_http_client *c, struct nml_http_client_conf *conf)

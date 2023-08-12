@@ -57,6 +57,9 @@ static int nml_hc_transfer_process(nml_http_client *c)
 			c->resp_complete = 1;
 			return NMLF_DONE;
 		}
+		if (c->chain_going_back) {
+			return NMLF_BACK;
+		}
 		c->output = c->transfer.data;
 		c->transfer.data.len = 0;
 	}

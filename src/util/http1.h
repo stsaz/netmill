@@ -230,7 +230,7 @@ static inline int http_req_write(char *buf, ffsize cap, ffstr method, ffstr path
 {
 	ffuint n = method.len + path.len + 8+4;
 	if (n > cap)
-		return (buf == NULL) ? n : -1;
+		return (buf == NULL) ? (int)n : -1;
 
 	char *p = buf;
 	p = ffmem_copy(p, method.ptr, method.len);

@@ -32,6 +32,7 @@ static int nml_autoindex_process(nml_http_sv_conn *c)
 	}
 	const char *path = c->autoindex.path.ptr;
 
+	cl_dbglog(c, "dirscan: %s", path);
 	if (0 != ffdirscan_open(&ds, path, 0)) {
 		cl_syswarnlog(c, "ffdirscan_open: %s", path);
 		int rc = HTTP_403_FORBIDDEN;
