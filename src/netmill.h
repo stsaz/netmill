@@ -9,7 +9,7 @@
 #include <ffbase/time.h>
 #include <ffbase/map.h>
 
-#define NML_VERSION  "0.6"
+#define NML_VERSION  "0.7"
 
 #ifdef FF_WIN
 typedef unsigned int uint;
@@ -76,20 +76,17 @@ struct nml_filter {
 
 struct ffringqueue;
 struct zzkevent;
+typedef fftask_handler nml_func;
 typedef fftimerqueue_node nml_timer;
 typedef fftask nml_task;
 #define nml_task_set(t, func, param)  fftask_set(t, func, param)
-typedef struct nml_tcp_listener nml_tcp_listener;
-typedef struct nml_udp_listener nml_udp_listener;
-typedef struct nml_http_server nml_http_server;
-typedef struct nml_http_sv_conn nml_http_sv_conn;
 
 /** Core interface, usually implemented by the root object */
 struct nml_core {
 	struct zzkevent* (*kev_new)(void *boss);
 	void (*kev_free)(void *boss, struct zzkevent *kev);
 	int (*kq_attach)(void *boss, ffsock sk, struct zzkevent *kev, void *obj);
-	void (*timer)(void *boss, nml_timer *tmr, int interval_msec, fftimerqueue_func func, void *param);
+	void (*timer)(void *boss, nml_timer *tmr, int interval_msec, nml_func func, void *param);
 	void (*task)(void *boss, nml_task *t, uint flags);
 	fftime (*date)(void *boss, ffstr *dts);
 };
@@ -118,6 +115,7 @@ struct nml_tcp_listener_conf {
 	uint v6_only :1;
 };
 
+typedef struct nml_tcp_listener nml_tcp_listener;
 FF_EXTERN nml_tcp_listener* nml_tcp_listener_new();
 FF_EXTERN void nml_tcp_listener_free(nml_tcp_listener *l);
 FF_EXTERN int nml_tcp_listener_conf(nml_tcp_listener *l, struct nml_tcp_listener_conf *conf);
@@ -137,6 +135,7 @@ struct nml_udp_listener_conf {
 	uint v6_only :1;
 };
 
+typedef struct nml_udp_listener nml_udp_listener;
 FF_EXTERN nml_udp_listener* nml_udp_listener_new();
 FF_EXTERN void nml_udp_listener_free(nml_udp_listener *l);
 FF_EXTERN int nml_udp_listener_conf(nml_udp_listener *l, struct nml_udp_listener_conf *conf);
@@ -148,6 +147,7 @@ FF_EXTERN int nml_udp_listener_run(nml_udp_listener *l);
  maintains the necessary infrastructure (KQ, TCP listener, timer queue, task queue)
  and implements Core interface */
 
+typedef struct nml_http_sv_conn nml_http_sv_conn;
 struct nml_http_server_conf {
 	void *opaque;
 
@@ -171,16 +171,16 @@ struct nml_http_server_conf {
 
 	struct {
 		const struct nml_address *listen_addresses;
-		uint max_connections;
-		uint events_num;
-		uint fdlimit_timeout_sec;
-		uint timer_interval_msec;
-		uint _conn_id_counter_default;
-		uint *conn_id_counter;
-		uint listen_backlog;
-		ffbyte polling_mode;
-		uint reuse_port :1;
-		uint v6_only :1;
+		uint	max_connections;
+		uint	events_num;
+		uint	fdlimit_timeout_sec;
+		uint	timer_interval_msec;
+		uint	_conn_id_counter_default;
+		uint*	conn_id_counter;
+		uint	listen_backlog;
+		ffbyte	polling_mode;
+		uint	reuse_port :1;
+		uint	v6_only :1;
 	} server;
 
 	const struct nml_filter **filters;
@@ -222,6 +222,7 @@ struct nml_http_server_conf {
 	uint debug_data_dump_len;
 };
 
+typedef struct nml_http_server nml_http_server;
 FF_EXTERN nml_http_server* nml_http_server_new();
 FF_EXTERN void nml_http_server_free(nml_http_server *srv);
 
@@ -238,8 +239,8 @@ FF_EXTERN void nml_http_server_stop(nml_http_server *srv);
 
 /** HTTP Server: file filter configuration */
 
-/** file: initialize content-type map
-content_types: heap buffer (e.g. "text/html	htm html\r\n"); user must not use it afterwards */
+/** Initialize content-type map.
+content_types: buffer on heap (e.g. "text/html htm html\r\n"); user must not use it afterwards */
 FF_EXTERN void nml_http_file_init(struct nml_http_server_conf *conf, ffstr content_types);
 
 FF_EXTERN void nml_http_file_uninit(struct nml_http_server_conf *conf);

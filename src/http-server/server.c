@@ -62,6 +62,7 @@ void nml_http_server_free(nml_http_server *s)
 
 	zzkqkcq_disconnect(&s->kq_kcq, s->kq.kq);
 	zzkq_timer_destroy(&s->kq_timer, s->kq.kq);
+	zzkq_destroy(&s->kq);
 	nml_tcp_listener_free(s->ls);
 	ffmem_free(s);
 }

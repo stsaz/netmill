@@ -10,6 +10,18 @@
 static void cl_filters_run(nml_http_sv_conn *c);
 static void cl_destroy(nml_http_sv_conn *c);
 
+static void conveyor_log_init(struct nml_conveyor *v, const char *log_id, const struct nml_http_server_conf *conf)
+{
+#ifdef NML_ENABLE_LOG_EXTRA
+	if (conf->log_level >= NML_LOG_DEBUG) {
+		v->log = conf->log;
+		v->log_obj = conf->log_obj;
+		v->log_ctx = "http-sv";
+		v->log_id = log_id;
+	}
+#endif
+}
+
 /** Start processing the client */
 void cl_start(ffsock csock, const ffsockaddr *peer, uint conn_id, struct nml_http_server_conf *conf)
 {
@@ -61,16 +73,7 @@ void cl_start(ffsock csock, const ffsockaddr *peer, uint conn_id, struct nml_htt
 #endif
 
 	conveyor_init(&c->conveyor, conf->filters);
-
-#ifdef NML_ENABLE_LOG_EXTRA
-	if (c->log_level >= NML_LOG_DEBUG) {
-		c->conveyor.log = conf->log;
-		c->conveyor.log_obj = conf->log_obj;
-		c->conveyor.log_ctx = "http-sv";
-		c->conveyor.log_id = c->id;
-	}
-#endif
-
+	conveyor_log_init(&c->conveyor, c->id, c->conf);
 	cl_filters_run(c);
 }
 

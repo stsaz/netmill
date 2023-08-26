@@ -16,7 +16,7 @@ ifeq "$(OS)" "windows"
 endif
 
 
-CFLAGS := -Wall -Wextra -Wno-unused-parameter -Wno-sign-compare
+CFLAGS := -Wall -Wextra -Wno-unused-parameter -Wno-sign-compare -Wno-multichar
 ifeq "$(COMPILER)" "gcc"
 	CFLAGS += -Wno-nonnull -Wno-array-bounds -Wno-stringop-overflow
 endif
@@ -29,7 +29,7 @@ else
 	CFLAGS += -O3 -fno-strict-aliasing
 endif
 ifeq "$(ASAN)" "1"
-	CFLAGS += -fsanitize=address
+	CFLAGS += -fsanitize=address -DFFBASE_MEM_ASAN
 	LINKFLAGS += -fsanitize=address
 endif
 ifneq "$(CPU_OLD)" "1"
@@ -48,40 +48,41 @@ ifneq "$(DEBUG)" "1"
 endif
 	$(SUBMAKE) app
 
-$(EXE): main.o \
-		server.o \
-		client.o \
-		filters.o \
-		proxy.o \
-		proxy-filters.o \
-		tcp-listener.o udp-listener.o \
-		oclient.o
-	$(LINK) $+ $(LINKFLAGS) $(LINK_PTHREAD) -o $@
-
-DEPS := $(NETMILL)/Makefile $(NETMILL)/src/netmill.h \
+DEPS := $(NETMILL)/Makefile \
+	$(NETMILL)/src/netmill.h \
 	$(NETMILL)/src/util/*.h \
 	$(FFOS)/FFOS/*.h \
 	$(FFBASE)/ffbase/*.h
 
-main.o: $(NETMILL)/src/main.c $(DEPS) \
-		$(NETMILL)/src/*.h
+HTTP_SRV_OBJ := \
+	http-server.o \
+	http-client.o \
+	http-filters.o \
+	http-proxy.o \
+	http-proxy-filters.o
+http-%.o: $(NETMILL)/src/http-server/%.c $(DEPS) \
+		$(NETMILL)/src/http-server/*.h
 	$(C) $(CFLAGS) $< -o $@
-
-%.o: $(NETMILL)/src/%.c $(DEPS)
-	$(C) $(CFLAGS) $< -o $@
-
-proxy-filters.o: $(NETMILL)/src/http-server/proxy-filters.c $(DEPS) \
+http-proxy-filters.o: $(NETMILL)/src/http-server/proxy-filters.c $(DEPS) \
 		$(NETMILL)/src/http-server/proxy-data.h \
 		$(NETMILL)/src/http-client/*.h
-	$(C) $(CFLAGS) $< -o $@
-
-%.o: $(NETMILL)/src/http-server/%.c $(DEPS) \
-		$(NETMILL)/src/http-server/*.h
 	$(C) $(CFLAGS) $< -o $@
 
 %.o: $(NETMILL)/src/http-client/%.c $(DEPS) \
 		$(NETMILL)/src/http-client/*.h
 	$(C) $(CFLAGS) $< -o $@
+
+%.o: $(NETMILL)/src/%.c $(DEPS)
+	$(C) $(CFLAGS) $< -o $@
+
+%.o: $(NETMILL)/src/exe/%.c $(DEPS) \
+		$(NETMILL)/src/exe/*.h
+	$(C) $(CFLAGS) $< -o $@
+$(EXE): main.o \
+		tcp-listener.o udp-listener.o \
+		oclient.o \
+		$(HTTP_SRV_OBJ)
+	$(LINK) $+ $(LINKFLAGS) $(LINK_PTHREAD) -o $@
 
 
 strip-debug: $(EXE).debug
@@ -96,7 +97,7 @@ clean:
 
 app:
 	mkdir -p $(APP_DIR)
-	cp -ruv $(EXE) \
+	cp -ru $(EXE) \
 		$(NETMILL)/content-types.conf \
 		$(NETMILL)/README.md \
 		$(NETMILL)/LICENSE \
