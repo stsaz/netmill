@@ -54,6 +54,14 @@ DEPS := $(NETMILL)/Makefile \
 	$(FFOS)/FFOS/*.h \
 	$(FFBASE)/ffbase/*.h
 
+DNS_SRV_OBJ := \
+	dns-client.o \
+	dns-filters.o \
+	dns-server.o
+dns-%.o: $(NETMILL)/src/dns-server/%.c $(DEPS) \
+		$(NETMILL)/src/dns-server/*.h
+	$(C) $(CFLAGS) $< -o $@
+
 HTTP_SRV_OBJ := \
 	http-server.o \
 	http-client.o \
@@ -81,7 +89,8 @@ http-proxy-filters.o: $(NETMILL)/src/http-server/proxy-filters.c $(DEPS) \
 $(EXE): main.o \
 		tcp-listener.o udp-listener.o \
 		oclient.o \
-		$(HTTP_SRV_OBJ)
+		$(HTTP_SRV_OBJ) \
+		$(DNS_SRV_OBJ)
 	$(LINK) $+ $(LINKFLAGS) $(LINK_PTHREAD) -o $@
 
 

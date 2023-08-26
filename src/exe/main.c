@@ -11,16 +11,19 @@
 
 struct worker {
 	nml_http_server *http;
+	nml_dns_server *dns;
 	ffthread thd;
 };
 
 struct http_sv_conf;
+struct dns_sv_conf;
 struct exe_conf {
 	uint log_level;
 	ffstr root_dir;
 	uint fd_limit;
 	const char *log_fn;
 	struct http_sv_conf *http;
+	struct dns_sv_conf *dns;
 };
 
 typedef struct job_if job_if;
@@ -56,6 +59,7 @@ char* conf_abs_filename(const char *rel_fn)
 
 #include <exe/log.h>
 #include <exe/http.h>
+#include <exe/dns.h>
 
 static int cmd_debug(struct exe_conf *conf)
 {
@@ -75,6 +79,7 @@ Global options:\n\
   -log FILE         Print logs to file\n\
 \n\
 Command:\n\
+  dns           Start DNS server\n\
   http          Start HTTP server\n\
 \n\
 `netmill COMMAND -h` will print details on each command.\n\
@@ -88,6 +93,7 @@ static const struct ffarg nml_args[] = {
 	{ "-Debug",		'1',	cmd_debug },
 	{ "-help",		'1',	usage },
 	{ "-log",		's',	O(log_fn) },
+	{ "dns",		'{',	dns_ctx },
 	{ "http",		'{',	http_ctx },
 	{}
 };

@@ -7,12 +7,14 @@
 #include <FFOS/semaphore.h>
 #include <util/taskqueue.h>
 #include <ffbase/time.h>
+#include <ffbase/vector.h>
 #include <ffbase/map.h>
 
 #define NML_VERSION  "0.7"
 
 #ifdef FF_WIN
 typedef unsigned int uint;
+typedef ffuint64 uint64;
 #endif
 
 enum NML_LOG {
@@ -304,3 +306,108 @@ FF_EXTERN void nml_http_client_free(nml_http_client *c);
 FF_EXTERN int nml_http_client_conf(nml_http_client *c, struct nml_http_client_conf *conf);
 
 FF_EXTERN void nml_http_client_run(nml_http_client *c);
+
+
+/** DNS Server */
+
+enum NML_DNS_BLOCK {
+	NML_DNS_BLOCK_EMPTY,
+	NML_DNS_BLOCK_NULL_IP,
+	NML_DNS_BLOCK_LOCAL_IP,
+	NML_DNS_BLOCK_NXDOMAIN,
+	NML_DNS_BLOCK_REFUSED,
+	NML_DNS_BLOCK_DROP,
+};
+
+typedef struct nml_dns_sv_conn nml_dns_sv_conn;
+struct nml_dns_server_conf {
+	void *opaque;
+
+	uint log_level; // enum NML_LOG
+	void (*log)(void *log_obj, uint level, const char *ctx, const char *id, const char *format, ...);
+	void *log_obj;
+	char *log_date_buffer;
+
+	struct nml_core core;
+	void *boss;
+
+	void (*wake)(nml_dns_sv_conn *c);
+
+	struct {
+		const struct nml_address *listen_addresses;
+		uint	max_connections;
+		uint	events_num;
+		uint	timer_interval_msec;
+		uint	_conn_id_counter_default;
+		uint*	conn_id_counter;
+		ffbyte	polling_mode;
+		uint	reuse_port :1;
+		uint	v6_only :1;
+	} server;
+
+	const struct nml_filter **filters;
+
+	struct {
+		ffvec	filenames; // char*[]
+		uint	rewrite_ttl;
+		uint	block_ttl;
+		uint	block_mode; // enum NML_DNS_BLOCK
+		uint	block_aaaa :1; // block AAAA requests
+
+		ffvec	sources; // struct source[]
+		ffmap	index; // host -> struct entry*
+		uint64	hits, misses; // stats
+	} hosts;
+
+	struct {
+		ffvec	upstreams; // char*[]
+		uint	read_timeout_msec;
+		uint	resend_attempts;
+
+		ffvec	servers; // struct upstream[]
+		uint	iserver;
+		uint64	out_reqs, in_msgs, in_data, out_data; // stats
+		ffmap	clients; // req.ID + req.Q -> nml_dns_sv_conn*
+	} upstreams;
+
+	uint debug_data_dump_len;
+};
+
+typedef struct nml_dns_server nml_dns_server;
+FF_EXTERN nml_dns_server* nml_dns_server_new();
+FF_EXTERN void nml_dns_server_free(nml_dns_server *srv);
+
+/** Set server configuration
+srv==NULL: initialize `conf` with default settings */
+FF_EXTERN int nml_dns_server_conf(nml_dns_server *srv, struct nml_dns_server_conf *conf);
+
+/** Run server event loop */
+FF_EXTERN int nml_dns_server_run(nml_dns_server *srv);
+
+/** Send stop-signal to the worker thread */
+FF_EXTERN void nml_dns_server_stop(nml_dns_server *srv);
+
+
+/** DNS Server: hosts filter configuration */
+
+/** Initialize hosts file.
+conf.hosts.filenames is an array of file names containing host rules. Syntax:
+  # comment
+  ! also a comment
+  block.com         # block 'block.com' and '*.block.com'
+  ||block.com^      # block 'block.com' and '*.block.com'
+  +un.block.com     # unblock 'un.block.com'
+  1.2.3.4 host.com  # respond with '1.2.3.4' for 'host.com'
+*/
+FF_EXTERN void nml_dns_hosts_init(struct nml_dns_server_conf *conf);
+
+FF_EXTERN void nml_dns_hosts_uninit(struct nml_dns_server_conf *conf);
+
+
+/** DNS Server: upstreams filter configuration */
+
+/** Initialize upstream servers.
+conf.upstreams.upstreams is an array of DNS server addresses */
+FF_EXTERN int nml_dns_upstreams_init(struct nml_dns_server_conf *conf);
+
+FF_EXTERN void nml_dns_upstreams_uninit(struct nml_dns_server_conf *conf);
