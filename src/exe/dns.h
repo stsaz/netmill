@@ -1,10 +1,17 @@
 /** netmill: executor: dns: process command-line arguments
 2023, Simon Zolin */
 
+#include <util/kq.h>
+
 struct dns_sv_conf {
 	struct nml_address listen_addr[2];
 	struct nml_dns_server_conf sv;
 	ffbyte block_aaaa;
+
+#ifdef FF_UNIX
+	ffkqsig kqsig;
+	struct zzkevent kqsig_kev;
+#endif
 };
 
 static int dns_cmd_listen(struct dns_sv_conf *conf, ffstr val)
@@ -81,6 +88,9 @@ Options:\n\
   upstream ADDR         Upstream server address\n\
   read-timeout N        Response receive timeout (msec) (def: 300)\n\
   resend-attempts N     Number of request re-send attempts after timeout (def: 2)\n\
+\n\
+Signal handlers:\n\
+  SIGHUP    Refresh lists\n\
 ";
 	ffstdout_write(help, FFS_LEN(help));
 	return R_DONE;
@@ -106,6 +116,9 @@ static const struct ffarg dns_args[] = {
 static struct dns_sv_conf* dns_conf()
 {
 	struct dns_sv_conf *conf = ffmem_new(struct dns_sv_conf);
+#ifdef FF_UNIX
+	conf->kqsig = FFKQSIG_NULL;
+#endif
 	conf->listen_addr[0].port = 53;
 	nml_dns_server_conf(NULL, &conf->sv);
 
@@ -197,6 +210,10 @@ static void dns_destroy()
 	nml_dns_hosts_uninit(&conf->sv);
 
 	FFSLICE_WALK(&x->workers, w) {
+#ifdef FF_UNIX
+		if (w->dns)
+			ffkqsig_detach(conf->kqsig, conf->sv.core.kq(conf->sv.boss));
+#endif
 		nml_dns_server_free(w->dns);
 	}
 
@@ -205,8 +222,35 @@ static void dns_destroy()
 	ffmem_free(conf);
 }
 
+#ifdef FF_UNIX
+static void sig_handler(struct dns_sv_conf *conf)
+{
+	int sig = ffkqsig_read(conf->kqsig, NULL);
+	infolog("received system signal: %d", sig);
+	switch (sig) {
+	case SIGHUP:
+		nml_dns_hosts_refresh(&conf->sv);  break;
+	}
+}
+#endif
+
+static void sig_prepare(struct dns_sv_conf *conf)
+{
+#ifdef FF_UNIX
+	static const int sigs[] = { SIGHUP };
+	ffsig_mask(SIG_BLOCK, sigs, FF_COUNT(sigs));
+	conf->kqsig_kev.rhandler = (void*)sig_handler;
+	conf->kqsig_kev.obj = conf;
+	conf->kqsig_kev.rtask.active = 1;
+	if (FFKQSIG_NULL == (conf->kqsig = ffkqsig_attach(conf->sv.core.kq(conf->sv.boss), sigs, FF_COUNT(sigs), &conf->kqsig_kev)))
+		syserrlog("ffkqsig_attach");
+#endif
+}
+
 static int dns_run()
 {
+	sig_prepare(x->conf.dns);
+
 	struct worker *w = x->workers.ptr;
 	if (nml_dns_server_run(w->dns))
 		return -1;

@@ -9,6 +9,9 @@
 #define syserror(conf, ...) \
 	conf->log(conf->log_obj, NML_LOG_SYSERR, "hosts", NULL, __VA_ARGS__)
 
+#define syswarning(conf, ...) \
+	conf->log(conf->log_obj, NML_LOG_SYSWARN, "hosts", NULL, __VA_ARGS__)
+
 #define warning(conf, ...) \
 	conf->log(conf->log_obj, NML_LOG_WARN, "hosts", NULL, __VA_ARGS__)
 
@@ -367,12 +370,53 @@ static int hosts_find(struct nml_dns_server_conf *conf, const ffdns_question *q,
 	return t;
 }
 
+/** Add existing hosts to a map */
+static int source_addhosts(struct nml_dns_server_conf *conf, struct source *src)
+{
+	if (0 != ffmap_grow(&conf->hosts.index, src->entries.len))
+		return -1;
+
+	struct entry *ent;
+	FFSLICE_WALK(&src->entries, ent) {
+		ffstr host = entry_host(ent);
+		uint hash = ffmap_hash(host.ptr, host.len);
+		void *val = ffmap_find_hash(&conf->hosts.index, hash, host.ptr, host.len, NULL);
+		if (val) {
+			verbose(conf, "overwriting the existing entry for %S", &host);
+			ffmap_rm_hash(&conf->hosts.index, hash, val);
+		}
+
+		ffmap_add_hash(&conf->hosts.index, hash, ent);
+	}
+
+	struct entry_ip *ent_ip;
+	FFSLICE_WALK(&src->entries_ip, ent_ip) {
+		ffstr host = entry_host((struct entry*)ent_ip);
+		uint hash = ffmap_hash(host.ptr, host.len);
+		void *val = ffmap_find_hash(&conf->hosts.index, hash, host.ptr, host.len, NULL);
+		if (val) {
+			verbose(conf, "overwriting the existing entry for %S", &host);
+			ffmap_rm_hash(&conf->hosts.index, hash, val);
+		}
+
+		ffmap_add_hash(&conf->hosts.index, hash, ent_ip);
+	}
+
+	info(conf, "added %L from %s"
+		, src->entries.len, src->name.ptr);
+	return 0;
+}
+
 static int read_sources(struct nml_dns_server_conf *conf)
 {
 	ffmap_init(&conf->hosts.index, map_keyeq);
 
 	struct source *src;
 	FFSLICE_WALK(&conf->hosts.sources, src) {
+		if (src->mtime.sec != 0) {
+			source_addhosts(conf, src);
+			continue;
+		}
 		source_read(conf, src);
 	}
 
@@ -383,6 +427,36 @@ static int read_sources(struct nml_dns_server_conf *conf)
 	info(conf, "total:%LB/%L"
 		, total + conf->hosts.index.cap * sizeof(struct _ffmap_item), conf->hosts.index.len);
 	return 0;
+}
+
+void nml_dns_hosts_refresh(struct nml_dns_server_conf *conf)
+{
+	debug(conf, "refreshing...");
+
+	uint n = 0;
+	struct source *src;
+	FFSLICE_WALK(&conf->hosts.sources, src) {
+
+		fffileinfo fi;
+		if (!!fffile_info_path(src->name.ptr, &fi)) {
+			syswarning(conf, "file info: %s", src->name.ptr);
+			continue;
+		}
+
+		fftime mtime = fffileinfo_mtime(&fi);
+		if (!fftime_cmp(&mtime, &src->mtime))
+			continue; // file isn't changed
+
+		fftime_null(&src->mtime);
+		debug(conf, "file %s has been modified, reloading...", src->name.ptr);
+		n++;
+	}
+
+	if (n == 0)
+		return; // nothing to update
+
+	ffmap_free(&conf->hosts.index);
+	read_sources(conf);
 }
 
 void nml_dns_hosts_init(struct nml_dns_server_conf *conf)
@@ -504,6 +578,7 @@ const struct nml_filter nml_filter_dns_hosts = {
 };
 
 #undef syserror
+#undef syswarning
 #undef warning
 #undef info
 #undef verbose

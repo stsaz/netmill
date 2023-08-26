@@ -5,6 +5,7 @@
 #include <FFOS/socket.h>
 #include <FFOS/timerqueue.h>
 #include <FFOS/semaphore.h>
+#include <FFOS/queue.h>
 #include <util/taskqueue.h>
 #include <ffbase/time.h>
 #include <ffbase/vector.h>
@@ -87,7 +88,12 @@ typedef fftask nml_task;
 struct nml_core {
 	struct zzkevent* (*kev_new)(void *boss);
 	void (*kev_free)(void *boss, struct zzkevent *kev);
+
+	/** Connect fd and zzkevent object */
 	int (*kq_attach)(void *boss, ffsock sk, struct zzkevent *kev, void *obj);
+
+	ffkq (*kq)(void *boss);
+
 	void (*timer)(void *boss, nml_timer *tmr, int interval_msec, nml_func func, void *param);
 	void (*task)(void *boss, nml_task *t, uint flags);
 	fftime (*date)(void *boss, ffstr *dts);
@@ -402,6 +408,9 @@ conf.hosts.filenames is an array of file names containing host rules. Syntax:
 FF_EXTERN void nml_dns_hosts_init(struct nml_dns_server_conf *conf);
 
 FF_EXTERN void nml_dns_hosts_uninit(struct nml_dns_server_conf *conf);
+
+/** Re-read source files if necessary */
+FF_EXTERN void nml_dns_hosts_refresh(struct nml_dns_server_conf *conf);
 
 
 /** DNS Server: upstreams filter configuration */

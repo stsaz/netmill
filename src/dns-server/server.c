@@ -128,6 +128,12 @@ static int sv_kq_attach(void *p, ffsock sk, struct zzkevent *kev, void *obj)
 	return zzkq_attach(&s->kq, (fffd)sk, kev);
 }
 
+static ffkq sv_kq(void *p)
+{
+	nml_dns_server *s = p;
+	return s->kq.kq;
+}
+
 static void sv_task(void *p, nml_task *t, uint flags)
 {
 	nml_dns_server *s = p;
@@ -145,6 +151,7 @@ static const struct nml_core core = {
 	.kev_new = sv_kev_new,
 	.kev_free = sv_kev_free,
 	.kq_attach = sv_kq_attach,
+	.kq = sv_kq,
 	.timer = sv_timer,
 	.task = sv_task,
 	.date = sv_date,
