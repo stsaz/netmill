@@ -6,6 +6,7 @@
 #include <FFOS/timerqueue.h>
 #include <FFOS/semaphore.h>
 #include <FFOS/queue.h>
+#include <FFOS/filemon.h>
 #include <util/taskqueue.h>
 #include <ffbase/time.h>
 #include <ffbase/vector.h>
@@ -36,6 +37,8 @@ enum NML_LOG {
 #ifdef NML_ENABLE_LOG_EXTRA
 #define ZZKQ_LOG_EXTRA  NML_LOG_EXTRA
 #endif
+
+#include <util/kq.h>
 
 enum NMLF_R {
 	/** Go forward with filter's last output data chunk.
@@ -355,14 +358,23 @@ struct nml_dns_server_conf {
 
 	struct {
 		ffvec	filenames; // char*[]
+		uint	file_refresh_period_sec;
 		uint	rewrite_ttl;
 		uint	block_ttl;
 		uint	block_mode; // enum NML_DNS_BLOCK
 		uint	block_aaaa :1; // block AAAA requests
+		uint	monitor_change :1; // monitor for file change
 
 		ffvec	sources; // struct source[]
 		ffmap	index; // host -> struct entry*
 		uint64	hits, misses; // stats
+
+		nml_timer refresh_timer;
+#ifdef FF_LINUX
+		fffilemon fm;
+		struct zzkevent fm_kev;
+		char	fm_buf[16*1024];
+#endif
 	} hosts;
 
 	struct {

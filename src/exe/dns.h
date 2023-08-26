@@ -7,6 +7,7 @@ struct dns_sv_conf {
 	struct nml_address listen_addr[2];
 	struct nml_dns_server_conf sv;
 	ffbyte block_aaaa;
+	ffbyte monitor;
 
 #ifdef FF_UNIX
 	ffkqsig kqsig;
@@ -57,7 +58,8 @@ static int dns_cmd_block_mode(struct dns_sv_conf *conf, ffstr val)
 static int dns_cmd_fin(struct dns_sv_conf *conf)
 {
 	conf->sv.hosts.block_aaaa = conf->block_aaaa;
-	nml_dns_hosts_init(&conf->sv);
+	conf->sv.hosts.monitor_change = conf->monitor;
+	conf->sv.hosts.file_refresh_period_sec = 1*60;
 	x->job = &dns_serv;
 	return 0;
 }
@@ -84,6 +86,7 @@ Options:\n\
                       drop\n\
   block-ttl N       TTL for blocked responses (def: 60)\n\
   rewrite-ttl N     TTL for rewritten responses (def: 60)\n\
+  monitor           Auto-refresh after hosts file has been updated\n\
 \n\
   upstream ADDR         Upstream server address\n\
   read-timeout N        Response receive timeout (msec) (def: 300)\n\
@@ -104,6 +107,7 @@ static const struct ffarg dns_args[] = {
 	{ "help",			'1',	dns_cmd_help },
 	{ "hosts",			'+s',	dns_cmd_hosts },
 	{ "listen",			'S',	dns_cmd_listen },
+	{ "monitor",		'1',	O(monitor) },
 	{ "read-timeout",	'u',	O(sv.upstreams.read_timeout_msec) },
 	{ "resend-attempts",'u',	O(sv.upstreams.resend_attempts) },
 	{ "rewrite-ttl",	'u',	O(sv.hosts.rewrite_ttl) },
@@ -178,7 +182,9 @@ static int dns_setup()
 			return -1;
 	}
 
-	if (nml_dns_upstreams_init(&x->conf.dns->sv))
+	nml_dns_hosts_init(sc);
+
+	if (nml_dns_upstreams_init(sc))
 		return -1;
 	return 0;
 }

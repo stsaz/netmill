@@ -459,6 +459,63 @@ void nml_dns_hosts_refresh(struct nml_dns_server_conf *conf)
 	read_sources(conf);
 }
 
+static void hosts_timer(void *param) { nml_dns_hosts_refresh(param); }
+
+#ifdef FF_LINUX
+static void hosts_on_change(void *param)
+{
+	struct nml_dns_server_conf *conf = param;
+	int refresh = 0;
+	for (;;) {
+		int r = fffilemon_read_async(conf->hosts.fm, conf->hosts.fm_buf, sizeof(conf->hosts.fm_buf), NULL);
+		if (r < 0) {
+			if (fferr_last() != FFFILEMON_EINPROGRESS)
+				syserror(conf, "fffilemon_read_async");
+			break;
+		}
+		debug(conf, "fffilemon_read_async: %u", r);
+
+		ffstr s = FFSTR_INITN(conf->hosts.fm_buf, r);
+		for (;;) {
+			ffstr name;
+			uint ev;
+			int wd = fffilemon_next(conf->hosts.fm, &s, &name, NULL, &ev);
+			if (wd < 0)
+				break;
+			refresh = 1;
+			debug(conf, "file changed: %d %xu", wd, ev);
+		}
+	}
+
+	if (refresh)
+		nml_dns_hosts_refresh(conf);
+}
+#endif
+
+static void hosts_monitor_change(struct nml_dns_server_conf *conf)
+{
+	if (!conf->hosts.monitor_change) return;
+
+#ifdef FF_LINUX
+	if (FFFILEMON_NULL == (conf->hosts.fm = fffilemon_open(IN_NONBLOCK))) {
+		syswarning(conf, "fffilemon_open");
+		return;
+	}
+
+	conf->hosts.fm_kev.rhandler = hosts_on_change;
+	conf->hosts.fm_kev.rtask.active = 1;
+	if (0 != conf->core.kq_attach(conf->boss, conf->hosts.fm, &conf->hosts.fm_kev, conf))
+		return;
+
+	struct source *src;
+	FFSLICE_WALK(&conf->hosts.sources, src) {
+		// Note: this fails for non-existing files
+		if (-1 == fffilemon_add(conf->hosts.fm, src->name.ptr, FFFILEMON_EV_CHANGE))
+			syswarning(conf, "fffilemon_add: %s", src->name.ptr);
+	}
+#endif
+}
+
 void nml_dns_hosts_init(struct nml_dns_server_conf *conf)
 {
 	const char **fn;
@@ -467,6 +524,8 @@ void nml_dns_hosts_init(struct nml_dns_server_conf *conf)
 		src->name = FFSTR_Z(*fn);
 	}
 	read_sources(conf);
+	conf->core.timer(conf->boss, &conf->hosts.refresh_timer, conf->hosts.file_refresh_period_sec * 1000, hosts_timer, conf);
+	hosts_monitor_change(conf);
 }
 
 void nml_dns_hosts_uninit(struct nml_dns_server_conf *conf)
