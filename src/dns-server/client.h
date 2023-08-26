@@ -62,9 +62,10 @@ struct nml_dns_sv_conn {
 	ffsock sk;
 	ffsockaddr peer;
 	char id[12]; // "*ID"
-	struct dns_msg req;
+	struct dns_msg req, resp;
 	ffstr reqbuf;
 	ffvec respbuf;
+	ffstr respbuf_cached;
 	uint rcode;
 	ffdns_answer answer;
 	ffip6 ip;

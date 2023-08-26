@@ -8,6 +8,7 @@ struct dns_sv_conf {
 	struct nml_dns_server_conf sv;
 	ffbyte block_aaaa;
 	ffbyte monitor;
+	char *cache_dir;
 
 #ifdef FF_UNIX
 	ffkqsig kqsig;
@@ -55,11 +56,19 @@ static int dns_cmd_block_mode(struct dns_sv_conf *conf, ffstr val)
 	return 0;
 }
 
+static int dns_cmd_cache_dir(struct dns_sv_conf *conf, const char *val)
+{
+	conf->cache_dir = conf_abs_filename(val);
+	conf->sv.filecache.dir = conf->cache_dir;
+	return 0;
+}
+
 static int dns_cmd_fin(struct dns_sv_conf *conf)
 {
-	conf->sv.hosts.block_aaaa = conf->block_aaaa;
-	conf->sv.hosts.monitor_change = conf->monitor;
-	conf->sv.hosts.file_refresh_period_sec = 1*60;
+	struct nml_dns_server_conf *sc = &conf->sv;
+	sc->hosts.block_aaaa = conf->block_aaaa;
+	sc->hosts.monitor_change = conf->monitor;
+	sc->hosts.file_refresh_period_sec = 1*60;
 	x->job = &dns_serv;
 	return 0;
 }
@@ -88,6 +97,10 @@ Options:\n\
   rewrite-ttl N     TTL for rewritten responses (def: 60)\n\
   monitor           Auto-refresh after hosts file has been updated\n\
 \n\
+  cache-dir DIR     Cache directory name\n\
+  min-ttl N         Minimum TTL value for a cached no-error response\n\
+  error-ttl N       Minimum TTL value for a cached error response\n\
+\n\
   upstream ADDR         Upstream server address\n\
   read-timeout N        Response receive timeout (msec) (def: 300)\n\
   resend-attempts N     Number of request re-send attempts after timeout (def: 2)\n\
@@ -104,9 +117,12 @@ static const struct ffarg dns_args[] = {
 	{ "aaaa-block",		'1',	O(block_aaaa) },
 	{ "block-mode",		'S',	dns_cmd_block_mode },
 	{ "block-ttl",		'u',	O(sv.hosts.block_ttl) },
+	{ "cache-dir",		's',	dns_cmd_cache_dir },
+	{ "error-ttl",		'u',	O(sv.filecache.error_ttl) },
 	{ "help",			'1',	dns_cmd_help },
 	{ "hosts",			'+s',	dns_cmd_hosts },
 	{ "listen",			'S',	dns_cmd_listen },
+	{ "min-ttl",		'u',	O(sv.filecache.min_ttl) },
 	{ "monitor",		'1',	O(monitor) },
 	{ "read-timeout",	'u',	O(sv.upstreams.read_timeout_msec) },
 	{ "resend-attempts",'u',	O(sv.upstreams.resend_attempts) },
@@ -183,6 +199,7 @@ static int dns_setup()
 	}
 
 	nml_dns_hosts_init(sc);
+	nml_dns_filecache_init(sc);
 
 	if (nml_dns_upstreams_init(sc))
 		return -1;
@@ -225,6 +242,7 @@ static void dns_destroy()
 
 	ffvec_free(&conf->sv.upstreams.upstreams);
 	ffvec_free(&conf->sv.hosts.filenames);
+	ffmem_free(conf->cache_dir);
 	ffmem_free(conf);
 }
 

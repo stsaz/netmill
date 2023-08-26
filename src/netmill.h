@@ -378,6 +378,12 @@ struct nml_dns_server_conf {
 	} hosts;
 
 	struct {
+		const char *dir;
+		uint	min_ttl;
+		uint	error_ttl;
+	} filecache;
+
+	struct {
 		ffvec	upstreams; // char*[]
 		uint	read_timeout_msec;
 		uint	resend_attempts;
@@ -432,3 +438,8 @@ conf.upstreams.upstreams is an array of DNS server addresses */
 FF_EXTERN int nml_dns_upstreams_init(struct nml_dns_server_conf *conf);
 
 FF_EXTERN void nml_dns_upstreams_uninit(struct nml_dns_server_conf *conf);
+
+
+/** DNS Server: file-cache filter configuration */
+
+FF_EXTERN int nml_dns_filecache_init(struct nml_dns_server_conf *conf);
