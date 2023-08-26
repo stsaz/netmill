@@ -54,7 +54,7 @@ $(EXE): main.o \
 		filters.o \
 		proxy.o \
 		proxy-filters.o \
-		tcp-listener.o \
+		tcp-listener.o udp-listener.o \
 		oclient.o
 	$(LINK) $+ $(LINKFLAGS) $(LINK_PTHREAD) -o $@
 

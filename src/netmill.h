@@ -80,6 +80,7 @@ typedef fftimerqueue_node nml_timer;
 typedef fftask nml_task;
 #define nml_task_set(t, func, param)  fftask_set(t, func, param)
 typedef struct nml_tcp_listener nml_tcp_listener;
+typedef struct nml_udp_listener nml_udp_listener;
 typedef struct nml_http_server nml_http_server;
 typedef struct nml_http_sv_conn nml_http_sv_conn;
 
@@ -99,7 +100,7 @@ struct nml_address {
 };
 
 
-/** TCP Listener: sw-module which calls the parent when a new inbound connection is established */
+/** TCP & UDP Listener: sw-module which calls the parent when a new inbound connection is established */
 
 struct nml_tcp_listener_conf {
 	uint log_level; // enum NML_LOG
@@ -121,6 +122,25 @@ FF_EXTERN nml_tcp_listener* nml_tcp_listener_new();
 FF_EXTERN void nml_tcp_listener_free(nml_tcp_listener *l);
 FF_EXTERN int nml_tcp_listener_conf(nml_tcp_listener *l, struct nml_tcp_listener_conf *conf);
 FF_EXTERN int nml_tcp_listener_run(nml_tcp_listener *l);
+
+struct nml_udp_listener_conf {
+	uint log_level; // enum NML_LOG
+	void (*log)(void *log_obj, uint level, const char *ctx, const char *id, const char *format, ...);
+	void *log_obj;
+
+	struct nml_core core;
+	void (*on_recv_udp)(void *boss, ffsock sk, ffsockaddr *addr, ffstr request);
+	void *boss;
+
+	struct nml_address addr;
+	uint reuse_port :1;
+	uint v6_only :1;
+};
+
+FF_EXTERN nml_udp_listener* nml_udp_listener_new();
+FF_EXTERN void nml_udp_listener_free(nml_udp_listener *l);
+FF_EXTERN int nml_udp_listener_conf(nml_udp_listener *l, struct nml_udp_listener_conf *conf);
+FF_EXTERN int nml_udp_listener_run(nml_udp_listener *l);
 
 
 /** HTTP Server: high-level module with a flexible setup:
