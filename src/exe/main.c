@@ -17,6 +17,7 @@ struct worker {
 
 struct http_sv_conf;
 struct dns_sv_conf;
+struct svc_conf;
 struct exe_conf {
 	uint log_level;
 	ffstr root_dir;
@@ -24,6 +25,7 @@ struct exe_conf {
 	const char *log_fn;
 	struct http_sv_conf *http;
 	struct dns_sv_conf *dns;
+	struct svc_conf *svc;
 };
 
 typedef struct job_if job_if;
@@ -60,6 +62,7 @@ char* conf_abs_filename(const char *rel_fn)
 #include <exe/log.h>
 #include <exe/http.h>
 #include <exe/dns.h>
+#include <exe/service.h>
 
 static int cmd_debug(struct exe_conf *conf)
 {
@@ -81,8 +84,9 @@ Global options:\n\
 Command:\n\
   dns           Start DNS server\n\
   http          Start HTTP server\n\
+  service       Install system service\n\
 \n\
-`netmill COMMAND -h` will print details on each command.\n\
+`netmill COMMAND help` will print details on each command.\n\
 ";
 	ffstdout_write(help, FFS_LEN(help));
 	return R_DONE;
@@ -95,6 +99,7 @@ static const struct ffarg nml_args[] = {
 	{ "-log",		's',	O(log_fn) },
 	{ "dns",		'{',	dns_ctx },
 	{ "http",		'{',	http_ctx },
+	{ "service",	'{',	svc_ctx },
 	{}
 };
 #undef O
