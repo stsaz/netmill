@@ -4,6 +4,7 @@
 #include <netmill.h>
 #include <util/jni-helper.h>
 #include <util/kcq.h>
+#include <util/ipaddr.h>
 #include <FFOS/thread.h>
 #include <FFOS/ffos-extern.h>
 #include <ffbase/vector.h>
@@ -221,4 +222,34 @@ Java_com_github_stsaz_netmill_NetMill_httpStop(JNIEnv *env, jobject thiz)
 	ctx_destroy(c);
 	r = 0;
 	return r;
+}
+
+/** Get IP addresses from 'struct nml_nif_info' and convert them to String[] */
+JNIEXPORT jobjectArray JNICALL
+Java_com_github_stsaz_netmill_NetMill_listIPAddresses(JNIEnv *env, jobject thiz)
+{
+	ffvec ips = {};
+
+	struct nml_nif_info i = {};
+	nml_nif_info(&i);
+
+	struct nml_nif *nif;
+	FFSLICE_WALK(&i.nifs, nif) {
+		char buf[100];
+		int r = ffip46_tostr((void*)nif->ip, buf, sizeof(buf));
+		buf[r] = '\0';
+		*ffvec_pushT(&ips, char*) = ffsz_dup(buf);
+	}
+
+	jobjectArray jsa = jni_jsa_sza(env, ips.ptr, ips.len);
+
+	nml_nif_info_destroy(&i);
+
+	char **it;
+	FFSLICE_WALK(&ips, it) {
+		ffmem_free(*it);
+	}
+	ffvec_free(&ips);
+
+	return jsa;
 }

@@ -32,12 +32,21 @@ class NetMillAndroid {
 
 	int httpStart() {
 		int r = nml.httpStart(http);
-		status = String.format("Proxy server is listening on port %d", http.port);
-		http_server_active = true;
 		if (r != 0) {
 			status = String.format("Couldn't start proxy server: %s", http.error);
 			http_server_active = false;
+			return r;
 		}
+
+		StringBuilder s = new StringBuilder();
+		s.append(String.format("Proxy server is listening on port %d.\nAddresses:\n", http.port));
+		String[] ips = nml.listIPAddresses();
+		for (String ip : ips) {
+			s.append(String.format("%s\n", ip));
+		}
+		status = s.toString();
+
+		http_server_active = true;
 		return r;
 	}
 

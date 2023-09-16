@@ -149,7 +149,8 @@ $(LIB_DIR)/libnetmill.so: \
 		$(OBJ_DIR)/filters.o \
 		$(OBJ_DIR)/proxy.o \
 		$(OBJ_DIR)/proxy-filters.o \
-		$(OBJ_DIR)/tcp-listener.o
+		$(OBJ_DIR)/tcp-listener.o \
+		$(OBJ_DIR)/nif.o
 	$(LINK) -shared $(LINKFLAGS) $+ -o $@
 
 DEPS := \

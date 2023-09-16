@@ -443,3 +443,25 @@ FF_EXTERN void nml_dns_upstreams_uninit(struct nml_dns_server_conf *conf);
 /** DNS Server: file-cache filter configuration */
 
 FF_EXTERN int nml_dns_filecache_init(struct nml_dns_server_conf *conf);
+
+
+/** Get information about system network interfaces */
+
+struct nml_nif {
+	char name[16];
+	char ip[16];
+};
+
+struct nml_nif_info {
+	uint log_level; // enum NML_LOG
+	void (*log)(void *log_obj, uint level, const char *ctx, const char *id, const char *format, ...);
+	void *log_obj;
+
+	ffslice nifs; // struct nml_nif[]
+};
+
+static inline void nml_nif_info_destroy(struct nml_nif_info *i) {
+	ffslice_free(&i->nifs);
+}
+
+FF_EXTERN int nml_nif_info(struct nml_nif_info *info);

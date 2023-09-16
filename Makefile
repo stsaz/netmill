@@ -89,6 +89,7 @@ http-proxy-filters.o: $(NETMILL)/src/http-server/proxy-filters.c $(DEPS) \
 $(EXE): main.o \
 		tcp-listener.o udp-listener.o \
 		oclient.o \
+		nif.o \
 		$(HTTP_SRV_OBJ) \
 		$(DNS_SRV_OBJ)
 	$(LINK) $+ $(LINKFLAGS) $(LINK_PTHREAD) -o $@

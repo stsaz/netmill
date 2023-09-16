@@ -24,6 +24,8 @@ class NetMill {
 
 	native int httpStop();
 
+	native String[] listIPAddresses();
+
 	static {
 		System.loadLibrary("netmill");
 	}

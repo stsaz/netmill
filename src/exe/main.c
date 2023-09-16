@@ -70,6 +70,26 @@ static int cmd_debug(struct exe_conf *conf)
 	return 0;
 }
 
+static int nif_info()
+{
+	struct nml_nif_info i = {
+		.log_level = x->conf.log_level,
+		.log = exe_log,
+	};
+	nml_nif_info(&i);
+
+	struct nml_nif *nif;
+	FFSLICE_WALK(&i.nifs, nif) {
+		char buf[100];
+		int r = ffip46_tostr((void*)nif->ip, buf, sizeof(buf));
+		buf[r] = '\0';
+		ffstdout_fmt("%s\n", buf);
+	}
+
+	nml_nif_info_destroy(&i);
+	return R_DONE;
+}
+
 static int usage()
 {
 	static const char help[] = "\
@@ -84,6 +104,7 @@ Global options:\n\
 Command:\n\
   dns           Start DNS server\n\
   http          Start HTTP server\n\
+  if            Show network interfaces\n\
   service       Install system service\n\
 \n\
 `netmill COMMAND help` will print details on each command.\n\
@@ -99,6 +120,7 @@ static const struct ffarg nml_args[] = {
 	{ "-log",		's',	O(log_fn) },
 	{ "dns",		'{',	dns_ctx },
 	{ "http",		'{',	http_ctx },
+	{ "if",			'1',	nif_info },
 	{ "service",	'{',	svc_ctx },
 	{}
 };
