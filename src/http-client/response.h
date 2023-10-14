@@ -16,13 +16,14 @@ static void nml_oresp_close(nml_http_client *c)
 
 static int nml_oresp_process(nml_http_client *c)
 {
+	const char *base = c->input.ptr;
 	ffstr d = c->input, proto, msg;
 	uint code;
 	int r = http_resp_parse(d, &proto, &code, &msg);
 	if (r == 0) {
 		return NMLF_BACK;
 	} else if (r < 0) {
-		cl_warnlog(c, "response: bad status line");
+		cl_errlog(c, "response: bad status line");
 		return NMLF_ERR;
 	}
 	ffstr_shift(&d, r);
@@ -36,7 +37,7 @@ static int nml_oresp_process(nml_http_client *c)
 		if (r == 0) {
 			return NMLF_BACK;
 		} else if (r < 0) {
-			cl_warnlog(c, "response: bad header");
+			cl_errlog(c, "response: bad header");
 			return NMLF_ERR;
 		}
 		ffstr_shift(&d, r);
@@ -44,19 +45,19 @@ static int nml_oresp_process(nml_http_client *c)
 		if (r <= 2)
 			break;
 
-		 if (ffstr_ieqcz(&name, "Transfer-Encoding")) {
+		if (ffstr_ieqcz(&name, "Transfer-Encoding")) {
 			if (ffstr_imatchz(&val, "chunked")) // "chunked [; transfer-extension]"
 				c->response_chunked = 1;
 			c->response.content_length = ~0ULL;
 
 		} else if (ffstr_ieqcz(&name, "Content-Length")) {
 			if (have_content_length) {
-				cl_warnlog(c, "duplicate Content-Length");
+				cl_errlog(c, "duplicate Content-Length");
 				return NMLF_ERR;
 			}
 			if (!c->response_chunked
 				&& !ffstr_to_uint64(&val, &c->response.content_length)) {
-				cl_warnlog(c, "bad Content-Length");
+				cl_errlog(c, "bad Content-Length");
 				return NMLF_ERR;
 			}
 			have_content_length = 1;
@@ -66,25 +67,27 @@ static int nml_oresp_process(nml_http_client *c)
 				c->connection_close = 1;
 
 		} else if (ffstr_ieqcz(&name, "Content-Type")) {
-			range16_set(&c->response.content_type, val.ptr - c->input.ptr, val.len);
+			range16_set(&c->response.content_type, val.ptr - base, val.len);
 
 		} else if (ffstr_ieqcz(&name, "Location")) {
-			range16_set(&c->response.location, val.ptr - c->input.ptr, val.len);
+			range16_set(&c->response.location, val.ptr - base, val.len);
 		}
 	}
 
 	c->response.code = code;
-	range16_set(&c->response.status, proto.ptr+proto.len+1 - c->input.ptr, msg.ptr+msg.len - (proto.ptr+proto.len+1));
-	range16_set(&c->response.msg, msg.ptr - c->input.ptr, msg.len);
-	range16_set(&c->response.headers, firstline_len, d.ptr - c->input.ptr - firstline_len);
+	range16_set(&c->response.whole, 0, d.ptr - base);
+	range16_set(&c->response.status, proto.ptr+proto.len+1 - base, msg.ptr+msg.len - (proto.ptr+proto.len+1));
+	range16_set(&c->response.msg, msg.ptr - base, msg.len);
+	range16_set(&c->response.headers, firstline_len, d.ptr - base - firstline_len);
+	c->response.base = (char*)base;
 
-	cl_dbglog(c, "response: %*s", d.ptr - c->input.ptr, c->input.ptr);
+	cl_dbglog(c, "response: %*s", d.ptr - base, base);
 
 	uint http1_1 = ffstr_eqz(&proto, "HTTP/1.1");
 	if (!http1_1)
 		c->connection_close = 1;
 	c->output = c->input;
-	ffstr_shift(&c->output, d.ptr - c->input.ptr);
+	ffstr_shift(&c->output, d.ptr - base);
 
 	if (c->log_level >= NML_LOG_DEBUG) {
 		uint n = ffmin(c->output.len, c->conf->debug_data_dump_len);

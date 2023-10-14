@@ -9,6 +9,7 @@ Current features:
 * HTTP/1.1 server: local files, auto-index, virtual space, forward proxy (HTTP and tunelling)
 * HTTP/1.1 client
 * DNS server: hosts lists, hosts block lists, upstream servers, persistent cache
+* Certificate generator
 
 Contents:
 
@@ -125,6 +126,9 @@ sudo netmill service install \
 sudo systemctl start netmill
 sudo systemctl status netmill
 sudo systemctl enable netmill
+
+# Download a file over HTTP
+netmill url https://host.com/path/file
 ```
 
 

@@ -21,7 +21,8 @@ ifeq "$(COMPILER)" "gcc"
 	CFLAGS += -Wno-nonnull -Wno-array-bounds -Wno-stringop-overflow
 endif
 CFLAGS += -DFFBASE_HAVE_FFERR_STR
-CFLAGS += -I $(NETMILL)/src -I $(FFOS) -I $(FFBASE)
+CFLAGS += -MMD -MP
+CFLAGS += -I$(NETMILL)/src -I$(FFOS) -I$(FFBASE)
 CFLAGS += -g
 ifeq "$(DEBUG)" "1"
 	CFLAGS += -DNML_ENABLE_LOG_EXTRA -DFF_DEBUG -O0
@@ -48,52 +49,40 @@ ifneq "$(DEBUG)" "1"
 endif
 	$(SUBMAKE) app
 
-DEPS := $(NETMILL)/Makefile \
-	$(NETMILL)/src/netmill.h \
-	$(NETMILL)/src/util/*.h \
-	$(FFOS)/FFOS/*.h \
-	$(FFBASE)/ffbase/*.h
+-include $(wildcard *.d)
 
-DNS_SRV_OBJ := \
-	dns-client.o \
-	dns-filters.o \
-	dns-server.o
-dns-%.o: $(NETMILL)/src/dns-server/%.c $(DEPS) \
-		$(NETMILL)/src/dns-server/*.h
-	$(C) $(CFLAGS) $< -o $@
+EXE_OBJ := \
+	exe-main.o \
+	exe-cert.o \
+	exe-dns.o \
+	exe-http.o \
+	exe-url.o
+EXE_OBJ += \
+	worker.o \
+	tcp-listener.o udp-listener.o \
+	nif.o
 
-HTTP_SRV_OBJ := \
-	http-server.o \
-	http-client.o \
-	http-filters.o \
-	http-proxy.o \
-	http-proxy-filters.o
-http-%.o: $(NETMILL)/src/http-server/%.c $(DEPS) \
-		$(NETMILL)/src/http-server/*.h
-	$(C) $(CFLAGS) $< -o $@
-http-proxy-filters.o: $(NETMILL)/src/http-server/proxy-filters.c $(DEPS) \
-		$(NETMILL)/src/http-server/proxy-data.h \
-		$(NETMILL)/src/http-client/*.h
+include $(NETMILL)/src/dns-server/Makefile
+include $(NETMILL)/src/http-client/Makefile
+include $(NETMILL)/src/http-server/Makefile
+
+%.o: $(NETMILL)/src/%.c
 	$(C) $(CFLAGS) $< -o $@
 
-%.o: $(NETMILL)/src/http-client/%.c $(DEPS) \
-		$(NETMILL)/src/http-client/*.h
-	$(C) $(CFLAGS) $< -o $@
+EXE_OBJ += ffssl.o
+CFLAGS_OPENSSL := $(CFLAGS) -Wno-deprecated-declarations
+ifeq "$(OS)" "windows"
+	CFLAGS_OPENSSL += -I$(NETMILL)/3pt/openssl/openssl-3.1.3/include
+	LINKFLAGS += -L$(NETMILL)/3pt/_$(OS)-$(CPU)
+endif
+LINKFLAGS += -lssl -lcrypto
+ffssl.o: $(NETMILL)/src/util/ffssl.c
+	$(C) $(CFLAGS_OPENSSL) $< -o $@
 
-%.o: $(NETMILL)/src/%.c $(DEPS)
+exe-%.o: $(NETMILL)/src/exe/%.c
 	$(C) $(CFLAGS) $< -o $@
-
-%.o: $(NETMILL)/src/exe/%.c $(DEPS) \
-		$(NETMILL)/src/exe/*.h
-	$(C) $(CFLAGS) $< -o $@
-$(EXE): main.o \
-		tcp-listener.o udp-listener.o \
-		oclient.o \
-		nif.o \
-		$(HTTP_SRV_OBJ) \
-		$(DNS_SRV_OBJ)
+$(EXE): $(EXE_OBJ)
 	$(LINK) $+ $(LINKFLAGS) $(LINK_PTHREAD) -o $@
-
 
 strip-debug: $(EXE).debug
 %.debug: %
@@ -103,7 +92,7 @@ strip-debug: $(EXE).debug
 	touch $@
 
 clean:
-	rm -fv $(EXE) *.o
+	rm -v $(EXE) $(EXE_OBJ)
 
 app:
 	mkdir -p $(APP_DIR)
@@ -137,10 +126,7 @@ docker:
 	docker build -t netmill:latest .
 
 
-%.o: $(NETMILL)/src/test/%.c $(DEPS) \
-		$(NETMILL)/src/test/*.h \
-		$(NETMILL)/src/http-server/*.h \
-		$(NETMILL)/src/http-client/*.h
+%.o: $(NETMILL)/src/test/%.c
 	$(C) $(CFLAGS) $< -o $@
 test: test.o \
 		oclient.o \

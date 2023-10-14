@@ -17,18 +17,6 @@ void exe_log(void *opaque, uint level, const char *ctx, const char *id, const ch
 	va_end(va);
 }
 
-#define syserrlog(...) \
-	exe_log(x, NML_LOG_SYSERR, "netmill", NULL, __VA_ARGS__)
-
-#define infolog(...) \
-	exe_log(x, NML_LOG_INFO, "netmill", NULL, __VA_ARGS__)
-
-#define dbglog(...) \
-do { \
-	if (x->conf.log_level >= NML_LOG_DEBUG) \
-		exe_log(x, NML_LOG_DEBUG, "netmill", NULL, __VA_ARGS__); \
-} while (0)
-
 /** Check if fd is a terminal */
 static int std_console(fffd fd)
 {

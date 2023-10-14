@@ -326,14 +326,14 @@ static inline ffssize httpchunked_parse(struct httpchunked *c, ffstr input, ffst
 				else if (ch == '\n')
 					st = I_DAT;
 				else
-					return -2;
+					return -3;
 
 				if (c->size == 0)
 					c->last_chunk = 1;
 				continue;
 			}
 			if (c->size & 0xf000000000000000ULL)
-				return -2;
+				return -4;
 			c->size = (c->size << 4) | n;
 			st = I_SZ;
 			break;
@@ -341,7 +341,7 @@ static inline ffssize httpchunked_parse(struct httpchunked *c, ffstr input, ffst
 
 		case I_SZ_CR:
 			if (ch != '\n')
-				return -2;
+				return -5;
 			st = I_DAT;
 			break;
 
@@ -356,7 +356,7 @@ static inline ffssize httpchunked_parse(struct httpchunked *c, ffstr input, ffst
 					}
 					st = I_SZ;
 				} else {
-					return -2;
+					return -6;
 				}
 				continue;
 			}
@@ -369,7 +369,7 @@ static inline ffssize httpchunked_parse(struct httpchunked *c, ffstr input, ffst
 
 		case I_DAT_CR:
 			if (ch != '\n')
-				return -2;
+				return -7;
 			if (c->last_chunk) {
 				i = -1;
 				goto end;

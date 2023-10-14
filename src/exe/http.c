@@ -1,15 +1,13 @@
-/** netmill: executor: http: process command-line arguments
+/** netmill: executor: start HTTP server
 2022, Simon Zolin */
 
-#include <ffbase/args.h>
+#include <exe/shared.h>
 #include <util/ipaddr.h>
 #include <FFOS/sysconf.h>
 #include <FFOS/process.h>
 #include <FFOS/path.h>
 #include <FFOS/std.h>
-#ifdef FF_UNIX
-#include <sys/resource.h>
-#endif
+#include <ffbase/args.h>
 
 struct http_sv_conf {
 	uint workers_n;
@@ -20,6 +18,7 @@ struct http_sv_conf {
 	struct nml_address listen_addr[2];
 	struct nml_http_server_conf sv;
 };
+static struct http_sv_conf *hc;
 
 static int http_cmd_listen(struct http_sv_conf *conf, ffstr val)
 {
@@ -117,8 +116,8 @@ static struct http_sv_conf* http_conf()
 
 struct ffarg_ctx http_ctx()
 {
-	x->conf.http = http_conf();
-	struct ffarg_ctx ax = { http_args, x->conf.http };
+	hc = http_conf();
+	struct ffarg_ctx ax = { http_args, hc };
 	return ax;
 }
 
@@ -140,7 +139,7 @@ static void* http_wrk_create()
 	nml_http_server *s;
 	if (!(s = nml_http_server_new()))
 		return NULL;
-	if (nml_http_server_conf(s, &x->conf.http->sv)) {
+	if (nml_http_server_conf(s, &hc->sv)) {
 		nml_http_server_free(s);
 		return NULL;
 	}
@@ -170,9 +169,9 @@ static void wrk_cpu_affinity(struct worker *w, uint icpu)
 
 static void cpu_affinity()
 {
-	if (x->conf.http->cpumask == 0) return;
+	if (hc->cpumask == 0) return;
 
-	uint mask = x->conf.http->cpumask;
+	uint mask = hc->cpumask;
 	struct worker *w;
 	FFSLICE_WALK(&x->workers, w) {
 		uint n = ffbit_rfind32(mask);
@@ -192,11 +191,11 @@ static int http_setup()
 	if (ffsock_init(FFSOCK_INIT_SIGPIPE | FFSOCK_INIT_WSA | FFSOCK_INIT_WSAFUNCS))
 		return -1;
 
-	if (x->conf.http->kcall_workers != 0
-		&& 0 != zzkcq_create(&x->kcq, x->conf.http->kcall_workers, x->conf.http->sv.server.max_connections, x->conf.http->sv.server.polling_mode))
+	if (hc->kcall_workers != 0
+		&& 0 != zzkcq_create(&x->kcq, hc->kcall_workers, hc->sv.server.max_connections, hc->sv.server.polling_mode))
 		return -1;
 
-	struct nml_http_server_conf *sc = &x->conf.http->sv;
+	struct nml_http_server_conf *sc = &hc->sv;
 	sc->log_level = x->conf.log_level;
 	sc->log_obj = x;
 	sc->log = exe_log;
@@ -205,20 +204,20 @@ static int http_setup()
 	sc->server.conn_id_counter = &x->conn_id;
 	sc->server.reuse_port = 1;
 
-	if (x->conf.http->kcall_workers != 0) {
+	if (hc->kcall_workers != 0) {
 		sc->kcq_sq = x->kcq.sq;
 		sc->kcq_sq_sem = x->kcq.sem;
 	}
 
 	sc->filters = (void*)nml_http_server_filters;
-	if (x->conf.http->proxy)
+	if (hc->proxy)
 		sc->filters = (void*)nml_http_server_filters_proxy;
 
 	http_mods_init(sc);
 
-	if (NULL == ffvec_zallocT(&x->workers, x->conf.http->workers_n, struct worker))
+	if (NULL == ffvec_zallocT(&x->workers, hc->workers_n, struct worker))
 		return -1;
-	x->workers.len = x->conf.http->workers_n;
+	x->workers.len = hc->workers_n;
 	struct worker *w;
 	FFSLICE_WALK(&x->workers, w) {
 		if (NULL == (w->http = http_wrk_create()))
@@ -257,7 +256,7 @@ static void http_destroy()
 		http_wrk_destroy(w);
 	}
 
-	nml_http_file_uninit(&x->conf.http->sv);
+	nml_http_file_uninit(&hc->sv);
 }
 
 static int FFTHREAD_PROCCALL http_wrk_thread(struct worker *w)

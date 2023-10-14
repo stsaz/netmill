@@ -2,51 +2,19 @@
 2022, Simon Zolin */
 
 #include <netmill.h>
-#include <util/kcq.h>
+#include <exe/shared.h>
 #include <util/log.h>
 #include <FFOS/signal.h>
 #include <FFOS/thread.h>
+#include <FFOS/process.h>
 #include <FFOS/path.h>
 #include <FFOS/ffos-extern.h>
+#include <ffbase/args.h>
+#ifdef FF_UNIX
+#include <sys/resource.h>
+#endif
 
-struct worker {
-	nml_http_server *http;
-	nml_dns_server *dns;
-	ffthread thd;
-};
-
-struct http_sv_conf;
-struct dns_sv_conf;
-struct svc_conf;
-struct exe_conf {
-	uint log_level;
-	ffstr root_dir;
-	uint fd_limit;
-	const char *log_fn;
-	struct http_sv_conf *http;
-	struct dns_sv_conf *dns;
-	struct svc_conf *svc;
-};
-
-typedef struct job_if job_if;
-struct job_if {
-	int (*setup)();
-	int (*run)();
-	void (*stop)();
-	void (*destroy)();
-};
-
-struct exe {
-	struct exe_conf conf;
-	ffvec workers; // struct worker[]
-	uint conn_id;
-	struct zzlog log;
-	struct zzkcq kcq;
-
-	const job_if *job;
-};
-
-static struct exe *x;
+struct exe *x;
 
 /** Convert relative file name to absolute file name using application directory */
 char* conf_abs_filename(const char *rel_fn)
@@ -56,38 +24,14 @@ char* conf_abs_filename(const char *rel_fn)
 	return ffsz_allocfmt("%S%s", &x->conf.root_dir, rel_fn);
 }
 
-#define R_DONE  100
-#define R_BADVAL  101
-
 #include <exe/log.h>
-#include <exe/http.h>
-#include <exe/dns.h>
 #include <exe/service.h>
+#include <exe/if.h>
 
 static int cmd_debug(struct exe_conf *conf)
 {
 	conf->log_level = NML_LOG_DEBUG;
 	return 0;
-}
-
-static int nif_info()
-{
-	struct nml_nif_info i = {
-		.log_level = x->conf.log_level,
-		.log = exe_log,
-	};
-	nml_nif_info(&i);
-
-	struct nml_nif *nif;
-	FFSLICE_WALK(&i.nifs, nif) {
-		char buf[100];
-		int r = ffip46_tostr((void*)nif->ip, buf, sizeof(buf));
-		buf[r] = '\0';
-		ffstdout_fmt("%s\n", buf);
-	}
-
-	nml_nif_info_destroy(&i);
-	return R_DONE;
 }
 
 static int usage()
@@ -102,10 +46,12 @@ Global options:\n\
   -log FILE         Print logs to file\n\
 \n\
 Command:\n\
+  cert          Generate certificate+key PEM file\n\
   dns           Start DNS server\n\
   http          Start HTTP server\n\
   if            Show network interfaces\n\
   service       Install system service\n\
+  url           Execute HTTP request\n\
 \n\
 `netmill COMMAND help` will print details on each command.\n\
 ";
@@ -116,12 +62,15 @@ Command:\n\
 #define O(m)  (void*)(ffsize)FF_OFF(struct exe_conf, m)
 static const struct ffarg nml_args[] = {
 	{ "-Debug",		'1',	cmd_debug },
+
 	{ "-help",		'1',	usage },
 	{ "-log",		's',	O(log_fn) },
+	{ "cert",		'{',	cert_ctx },
 	{ "dns",		'{',	dns_ctx },
 	{ "http",		'{',	http_ctx },
 	{ "if",			'1',	nif_info },
 	{ "service",	'{',	svc_ctx },
+	{ "url",		'{',	url_ctx },
 	{}
 };
 #undef O

@@ -1,4 +1,4 @@
-/** netmill: executor: service: process command-line arguments
+/** netmill: executor: install system service
 2023, Simon Zolin */
 
 struct svc_conf {

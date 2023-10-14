@@ -23,7 +23,7 @@ static void nml_orecv_close(nml_http_client *c)
 
 static void nml_orecv_read_expired(nml_http_client *c)
 {
-	cl_dbglog(c, "receive timeout");
+	cl_warnlog(c, "receive timeout");
 	c->timeout = 1;
 	c->wake(c);
 }
@@ -88,7 +88,7 @@ static int nml_orecv_process(nml_http_client *c)
 
 	ffvec *buf = &c->recv.buf;
 
-	if (buf->len == c->conf->receive.max_buf) {
+	if (buf->len >= c->conf->receive.max_buf) {
 		cl_warnlog(c, "receive.max_buf limit reached");
 		return NMLF_ERR;
 	}

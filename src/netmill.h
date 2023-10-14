@@ -12,7 +12,7 @@
 #include <ffbase/vector.h>
 #include <ffbase/map.h>
 
-#define NML_VERSION  "0.7"
+#define NML_VERSION  "0.8"
 
 #ifdef FF_WIN
 typedef unsigned int uint;
@@ -88,6 +88,7 @@ typedef fftask nml_task;
 #define nml_task_set(t, func, param)  fftask_set(t, func, param)
 
 /** Core interface, usually implemented by the root object */
+typedef struct nml_core nml_core;
 struct nml_core {
 	struct zzkevent* (*kev_new)(void *boss);
 	void (*kev_free)(void *boss, struct zzkevent *kev);
@@ -106,6 +107,37 @@ struct nml_address {
 	ffbyte ip[16];
 	uint port;
 };
+
+
+/** Worker: default 'nml_core' implementation */
+
+struct nml_wrk_conf {
+	void *opaque;
+
+	uint log_level; // enum NML_LOG
+	void (*log)(void *log_obj, uint level, const char *ctx, const char *id, const char *format, ...);
+	void *log_obj;
+	const char *log_ctx;
+	char *log_date_buffer;
+
+	/** KCQ SQ and semaphore for offloading kernel operations.
+	NULL: don't use KCQ */
+	struct ffringqueue *kcq_sq;
+	ffsem kcq_sq_sem;
+
+	uint timer_interval_msec;
+	uint events_num;
+	uint max_connections;
+};
+
+typedef struct nml_wrk nml_wrk;
+
+FF_EXTERN const nml_core nml_wrk_core_if;
+FF_EXTERN nml_wrk* nml_wrk_new();
+FF_EXTERN void nml_wrk_free(nml_wrk *w);
+FF_EXTERN int nml_wrk_conf(nml_wrk *w, struct nml_wrk_conf *conf);
+FF_EXTERN int nml_wrk_run(nml_wrk *w);
+FF_EXTERN void nml_wrk_stop(nml_wrk *w);
 
 
 /** TCP & UDP Listener: sw-module which calls the parent when a new inbound connection is established */
@@ -151,6 +183,22 @@ FF_EXTERN nml_udp_listener* nml_udp_listener_new();
 FF_EXTERN void nml_udp_listener_free(nml_udp_listener *l);
 FF_EXTERN int nml_udp_listener_conf(nml_udp_listener *l, struct nml_udp_listener_conf *conf);
 FF_EXTERN int nml_udp_listener_run(nml_udp_listener *l);
+
+
+/* SSL configuration */
+
+struct ffssl_ctx_conf;
+struct nml_ssl_ctx {
+	uint log_level; // enum NML_LOG
+	void (*log)(void *log_obj, uint level, const char *ctx, const char *id, const char *format, ...);
+	void *log_obj;
+
+	struct ffssl_ctx_conf *ctx_conf;
+	void *ctx; // ffssl_ctx*
+};
+
+FF_EXTERN int nml_ssl_init(struct nml_ssl_ctx *ctx);
+FF_EXTERN void nml_ssl_uninit(struct nml_ssl_ctx *ctx);
 
 
 /** HTTP Server: high-level module with a flexible setup:
@@ -291,17 +339,25 @@ struct nml_http_client_conf {
 	struct nml_core core;
 	void *boss;
 
-	ffstr method, host, path, headers;
+	ffstr method,
+		host, // "hostname[:port]"
+		path,
+		headers;
 	const struct nml_filter **filters;
 
 	ffstr proxy_host;
-	uint proxy_port;
+	union {
+		uint proxy_port;
+		uint server_port; // override port value from 'host'
+	};
 
 	uint connect_timeout_msec, send_timeout_msec;
 	struct {
 		uint hdr_buf_size, max_buf, body_buf_size;
 		uint timeout_msec;
 	} receive;
+
+	struct nml_ssl_ctx *ssl_ctx;
 
 	uint max_redirect;
 	uint debug_data_dump_len;

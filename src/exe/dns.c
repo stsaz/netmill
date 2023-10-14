@@ -1,7 +1,11 @@
-/** netmill: executor: dns: process command-line arguments
+/** netmill: executor: start DNS server
 2023, Simon Zolin */
 
+#include <exe/shared.h>
 #include <util/kq.h>
+#include <util/ipaddr.h>
+#include <FFOS/signal.h>
+#include <ffbase/args.h>
 
 struct dns_sv_conf {
 	struct nml_address listen_addr[2];
@@ -15,6 +19,8 @@ struct dns_sv_conf {
 	struct zzkevent kqsig_kev;
 #endif
 };
+
+static struct dns_sv_conf *dc;
 
 static int dns_cmd_listen(struct dns_sv_conf *conf, ffstr val)
 {
@@ -159,8 +165,8 @@ static struct dns_sv_conf* dns_conf()
 
 struct ffarg_ctx dns_ctx()
 {
-	x->conf.dns = dns_conf();
-	struct ffarg_ctx ax = { dns_args, x->conf.dns };
+	dc = dns_conf();
+	struct ffarg_ctx ax = { dns_args, dc };
 	return ax;
 }
 
@@ -169,7 +175,7 @@ static void* dns_wrk_create()
 	nml_dns_server *s;
 	if (!(s = nml_dns_server_new()))
 		return NULL;
-	if (nml_dns_server_conf(s, &x->conf.dns->sv)) {
+	if (nml_dns_server_conf(s, &dc->sv)) {
 		nml_dns_server_free(s);
 		return NULL;
 	}
@@ -183,7 +189,7 @@ static int dns_setup()
 	if (ffsock_init(FFSOCK_INIT_SIGPIPE | FFSOCK_INIT_WSA | FFSOCK_INIT_WSAFUNCS))
 		return -1;
 
-	struct nml_dns_server_conf *sc = &x->conf.dns->sv;
+	struct nml_dns_server_conf *sc = &dc->sv;
 	sc->server.conn_id_counter = &x->conn_id;
 	sc->server.reuse_port = 1;
 
@@ -228,7 +234,7 @@ static void dns_destroy()
 		}
 	}
 
-	struct dns_sv_conf *conf = x->conf.dns;
+	struct dns_sv_conf *conf = dc;
 	nml_dns_upstreams_uninit(&conf->sv);
 	nml_dns_hosts_uninit(&conf->sv);
 
@@ -273,7 +279,7 @@ static void sig_prepare(struct dns_sv_conf *conf)
 
 static int dns_run()
 {
-	sig_prepare(x->conf.dns);
+	sig_prepare(dc);
 
 	struct worker *w = x->workers.ptr;
 	if (nml_dns_server_run(w->dns))

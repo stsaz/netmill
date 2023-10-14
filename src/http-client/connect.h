@@ -40,7 +40,7 @@ static int nml_connect_prepare(nml_http_client *c)
 
 static void nml_connect_expired(nml_http_client *c)
 {
-	cl_dbglog(c, "connect timeout");
+	cl_warnlog(c, "connect timeout");
 	c->timeout = 1;
 	c->wake(c);
 }
@@ -52,10 +52,6 @@ static void nml_connect_complete(nml_http_client *c)
 
 static int nml_connect(nml_http_client *c)
 {
-	if (c->timeout) {
-		return NMLF_ERR;
-	}
-
 	int r = ffsock_connect_async(c->sk, &c->connect.saddr, cl_kev_w(c));
 	cl_timer_stop(c, &c->connect.timer);
 	if (r < 0) {
@@ -86,6 +82,10 @@ static int nml_connect(nml_http_client *c)
 static int nml_connect_process(nml_http_client *c)
 {
 	for (;;) {
+
+		if (c->timeout) {
+			return NMLF_ERR;
+		}
 
 		if (c->sk == FFSOCK_NULL) {
 			if (c->connect.i_addr == c->resolve.addrs.len) {

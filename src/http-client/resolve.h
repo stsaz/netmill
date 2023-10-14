@@ -64,7 +64,7 @@ static int nml_resolve_open(nml_http_client *c)
 			return NMLF_ERR;
 	}
 
-	c->resolve.port = port;
+	c->resolve.port = (c->conf->server_port) ? c->conf->server_port : port;
 	return NMLF_OPEN;
 }
 

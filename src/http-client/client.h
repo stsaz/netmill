@@ -12,6 +12,9 @@
 
 /** Client-context logger */
 
+#define cl_syserrlog(c, ...) \
+	c->log(c->log_obj, NML_LOG_SYSERR, "http-cl", c->id, __VA_ARGS__)
+
 #define cl_errlog(c, ...) \
 	c->log(c->log_obj, NML_LOG_ERR, "http-cl", c->id, __VA_ARGS__)
 
@@ -78,6 +81,7 @@ struct nml_http_client {
 	uint r_pending :1;
 	uint w_pending :1;
 	uint io_connect_result_passed :1;
+	uint ssl_handshake_logged :1;
 
 	struct {
 		char *hostname;
@@ -121,7 +125,8 @@ struct nml_http_client {
 	struct {
 		ffuint64 content_length;
 		ffuint code;
-		range16 status, msg, headers, content_type, location;
+		range16 whole, status, msg, headers, content_type, location;
+		char *base;
 	} response;
 
 	struct {
@@ -129,6 +134,13 @@ struct nml_http_client {
 		struct httpchunked chunked;
 		ffuint64 size; // data left to process
 	} transfer;
+
+	struct {
+		void *conn; // ffssl_conn
+		ffstr recv_buffer;
+		uint data_sent;
+		ffstr out_data;
+	} ssl;
 };
 
 #define cl_kev_r_async(c, func)  c->kev->rhandler = (void*)func

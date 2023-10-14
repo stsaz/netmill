@@ -1,15 +1,7 @@
 /** netmill: http-server: HTTP proxy outbound filters
 2023, Simon Zolin */
 
-#include <http-client/resolve.h>
-#include <http-client/connect.h>
-#include <http-client/io.h>
-#include <http-client/request.h>
-#include <http-client/request-send.h>
-#include <http-client/response-receive.h>
-#include <http-client/response.h>
-#include <http-client/transfer.h>
-
+#include <http-client/client.h>
 #include <http-server/proxy-data.h>
 
 extern void nml_proxy_wake(struct nml_proxy *p);
@@ -95,6 +87,16 @@ const struct nml_filter nml_filter_http_cl_proxy_output = {
 	"proxy-output"
 };
 
+
+extern const struct nml_filter
+	nml_filter_resolve,
+	nml_filter_connect,
+	nml_filter_http_cl_request,
+	nml_filter_http_cl_send,
+	nml_filter_recv,
+	nml_filter_resp,
+	nml_filter_http_cl_transfer,
+	nml_filter_io;
 
 const struct nml_filter *ocl_filters[] = {
 	&nml_filter_http_cl_proxy_input,

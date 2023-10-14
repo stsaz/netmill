@@ -30,7 +30,7 @@ static int nml_hc_transfer_process(nml_http_client *c)
 			c->resp_complete = 1;
 			return NMLF_DONE;
 		} else if (r < 0) {
-			cl_warnlog(c, "bad chunked control data");
+			cl_warnlog(c, "bad chunked control data: %d", r);
 			return NMLF_ERR;
 		}
 		ffstr_shift(&c->transfer.data, r);
