@@ -15,6 +15,7 @@
 #define NML_VERSION  "0.8"
 
 #ifdef FF_WIN
+typedef unsigned short ushort;
 typedef unsigned int uint;
 typedef ffuint64 uint64;
 #endif

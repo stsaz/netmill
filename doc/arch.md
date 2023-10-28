@@ -2,7 +2,17 @@
 
 ## HTTP/1.1 server/client
 
-![](netmill-http.svg)
+Server:
+
+![](http-server.svg)
+
+Proxy:
+
+![](http-proxy.svg)
+
+Client:
+
+![](http-client.svg)
 
 The main point is that HTTP server/client implementation is easy to use from other projects.  It has a very flexible configuration: the parent code can add/substitute any filter in chain (as long as HTTP session logic is correct, of course).
 
@@ -90,3 +100,7 @@ The main point is that HTTP server/client implementation is easy to use from oth
 									>>
 										"..."
 ```
+
+## DNS
+
+![](dns.svg)

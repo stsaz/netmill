@@ -80,11 +80,11 @@ struct ffssl_ctx_conf {
 
 	char *ciphers; // ciphers separated by ':'
 	char *ciphers_tls13; // TLSv1.3 ciphersuites separated by ':'
-	u_int use_server_cipher :1;
+	uint use_server_cipher :1;
 
 	ffssl_tls_srvname_cb tls_srvname_func;
 
-	u_int allowed_protocols; // enum FFSSL_PROTO
+	uint allowed_protocols; // enum FFSSL_PROTO
 };
 
 /** Configurate ffssl_conn context. */
@@ -93,7 +93,7 @@ FF_EXTERN int ffssl_ctx_conf(ffssl_ctx *ctx, const struct ffssl_ctx_conf *conf);
 struct x509_store_ctx_st; // X509_STORE_CTX
 typedef int (*ffssl_verify_cb)(int preverify_ok, struct x509_store_ctx_st *x509ctx, void *udata);
 
-FF_EXTERN int ffssl_ctx_ca(ffssl_ctx *ctx, ffssl_verify_cb func, u_int verify_depth, const char *fn);
+FF_EXTERN int ffssl_ctx_ca(ffssl_ctx *ctx, ffssl_verify_cb func, uint verify_depth, const char *fn);
 
 /**
 size:
@@ -126,7 +126,7 @@ struct ffssl_opt {
 flags: enum ffssl_conn_create
 opt: additional options.
 Return enum FFSSL_E. */
-FF_EXTERN int ffssl_conn_create(ffssl_conn **c, ffssl_ctx *ctx, u_int flags, struct ffssl_opt *opt);
+FF_EXTERN int ffssl_conn_create(ffssl_conn **c, ffssl_ctx *ctx, uint flags, struct ffssl_opt *opt);
 
 FF_EXTERN void ffssl_conn_free(ffssl_conn *c);
 
@@ -140,7 +140,7 @@ enum FFSSL_INFO {
 
 /**
 flags: enum FFSSL_INFO */
-FF_EXTERN size_t ffssl_conn_get(ffssl_conn *c, u_int flags);
+FF_EXTERN size_t ffssl_conn_get(ffssl_conn *c, uint flags);
 
 enum FFSSL_INFO_PTR {
 	FFSSL_HOSTNAME,
@@ -151,7 +151,7 @@ enum FFSSL_INFO_PTR {
 
 /**
 flags: enum FFSSL_INFO_PTR */
-FF_EXTERN void* ffssl_conn_getptr(ffssl_conn *c, u_int flags);
+FF_EXTERN void* ffssl_conn_getptr(ffssl_conn *c, uint flags);
 
 /**
 These codes must be handled by user.
@@ -201,13 +201,13 @@ enum FFSSL_PKEY {
 
 /** Create a private key.
 flags: enum FFSSL_PKEY */
-FF_EXTERN int ffssl_key_create(ffssl_key **key, u_int bits, u_int flags);
+FF_EXTERN int ffssl_key_create(ffssl_key **key, uint bits, uint flags);
 
 FF_EXTERN void ffssl_key_free(ffssl_key *key);
 
 /** Get private key from PEM data.
 Return NULL on error. */
-FF_EXTERN ffssl_key* ffssl_key_read(ffstr data, u_int flags);
+FF_EXTERN ffssl_key* ffssl_key_read(ffstr data, uint flags);
 
 /** Convert private key to text */
 FF_EXTERN int ffssl_key_print(ffssl_key *key, ffstr *data);
@@ -244,7 +244,7 @@ FF_EXTERN void ffssl_cert_free(ffssl_cert *cert);
 
 /** Get certificate from PEM data.
 Return NULL on error. */
-FF_EXTERN ffssl_cert* ffssl_cert_read(ffstr data, u_int flags);
+FF_EXTERN ffssl_cert* ffssl_cert_read(ffstr data, uint flags);
 
 /** Convert certificate to text */
 FF_EXTERN int ffssl_cert_print(ffssl_cert *cert, ffstr *data);

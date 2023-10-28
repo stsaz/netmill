@@ -5,7 +5,7 @@ NETMILL := $(ROOT_DIR)/netmill
 FFBASE := $(ROOT_DIR)/ffbase
 FFOS := $(ROOT_DIR)/ffos
 
-include $(FFBASE)/test/makeconf
+include $(FFBASE)/conf.mk
 
 SUBMAKE := $(MAKE) -f $(firstword $(MAKEFILE_LIST))
 
@@ -73,9 +73,13 @@ EXE_OBJ += ffssl.o
 CFLAGS_OPENSSL := $(CFLAGS) -Wno-deprecated-declarations
 ifeq "$(OS)" "windows"
 	CFLAGS_OPENSSL += -I$(NETMILL)/3pt/openssl/openssl-3.1.3/include
-	LINKFLAGS += -L$(NETMILL)/3pt/_$(OS)-$(CPU)
+	LINKFLAGS += -L$(NETMILL)/3pt/_$(OS)-$(CPU) -lssl-3-x64 -lcrypto-3-x64
+	LIBS3 += \
+		$(NETMILL)/3pt/_$(OS)-$(CPU)/libssl-3-x64.dll \
+		$(NETMILL)/3pt/_$(OS)-$(CPU)/libcrypto-3-x64.dll
+else
+	LINKFLAGS += -lssl -lcrypto
 endif
-LINKFLAGS += -lssl -lcrypto
 ffssl.o: $(NETMILL)/src/util/ffssl.c
 	$(C) $(CFLAGS_OPENSSL) $< -o $@
 
@@ -102,6 +106,10 @@ app:
 		$(NETMILL)/LICENSE \
 		$(NETMILL)/www \
 		$(APP_DIR)
+ifneq "$(LIBS3)" ""
+	cp -ru $(LIBS3) \
+		$(APP_DIR)
+endif
 ifeq "$(OS)" "windows"
 	mv $(APP_DIR)/README.md $(APP_DIR)/README.txt
 	unix2dos $(APP_DIR)/README.txt

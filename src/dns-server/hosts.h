@@ -38,14 +38,14 @@ enum TYPE {
 #pragma pack(4)
 struct entry {
 	const char *host_ptr; // -> source.data
-	u_short host_len;
-	u_short type; // enum TYPE
+	ushort host_len;
+	ushort type; // enum TYPE
 };
 
 struct entry_ip {
 	const char *host_ptr;
-	u_short host_len;
-	u_short type; // enum TYPE
+	ushort host_len;
+	ushort type; // enum TYPE
 	ffbyte ip[16]; // for T_IPV4 and T_IPV6
 };
 #pragma pack(pop)
@@ -543,6 +543,8 @@ void nml_dns_hosts_uninit(struct nml_dns_server_conf *conf)
 
 static int nml_dns_hosts_open(nml_dns_sv_conn *c)
 {
+	if (c->status)
+		return NMLF_SKIP;
 	return NMLF_OPEN;
 }
 

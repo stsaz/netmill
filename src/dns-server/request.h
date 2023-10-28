@@ -36,6 +36,7 @@ static int nml_dns_req_process(nml_dns_sv_conn *c)
 	if (0 > ffdns_header_read(&c->req.h, c->reqbuf)) {
 		cl_warnlog(c, "ffdns_header_read");
 		c->rcode = FFDNS_FORMERR;
+		c->status = "client-error";
 		return NMLF_DONE;
 	}
 
@@ -47,6 +48,7 @@ static int nml_dns_req_process(nml_dns_sv_conn *c)
 	if (0 > ffdns_question_read(&c->req.q, c->reqbuf)){
 		cl_warnlog(c, "ffdns_question_read");
 		c->rcode = FFDNS_FORMERR;
+		c->status = "client-error";
 		return NMLF_DONE;
 	}
 

@@ -89,7 +89,7 @@ static int nml_connect_process(nml_http_client *c)
 
 		if (c->sk == FFSOCK_NULL) {
 			if (c->connect.i_addr == c->resolve.addrs.len) {
-				cl_warnlog(c, "no next address to connect");
+				cl_errlog(c, "no next address to connect");
 				return NMLF_ERR;
 			}
 

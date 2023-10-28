@@ -27,6 +27,8 @@ int nml_dns_filecache_init(struct nml_dns_server_conf *conf)
 
 static int nml_file_cache_req_open(nml_dns_sv_conn *c)
 {
+	if (c->status)
+		return NMLF_SKIP;
 	return NMLF_OPEN;
 }
 
@@ -156,6 +158,8 @@ const struct nml_filter nml_filter_dns_file_cache_req = {
 
 static int nml_file_cache_resp_open(nml_dns_sv_conn *c)
 {
+	if (!c->upstream_resp)
+		return NMLF_SKIP;
 	return NMLF_OPEN;
 }
 

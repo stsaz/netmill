@@ -1,6 +1,6 @@
 # Base settings for Makefile-s
 
-include ../../ffbase/test/makeconf
+include ../../ffbase/conf.mk
 
 CFLAGS := -fpic -fvisibility=hidden
 CFLAGS += -O3

@@ -1,6 +1,7 @@
 /** OpenSSL wrapper
 2015, Simon Zolin */
 
+typedef unsigned int uint;
 #include "ssl.h"
 #include <FFOS/error.h>
 #include <openssl/ssl.h>
@@ -20,7 +21,7 @@ struct ssl_global {
 static struct ssl_global *g;
 
 struct ssl_rbuf {
-	u_int cap, off, len;
+	uint cap, off, len;
 	char data[BUF_RECV_MIN];
 };
 
@@ -66,7 +67,7 @@ enum FFSSL_E {
 	FFSSL_EBIONEW,
 
 	/* For these codes SSL_get_error() value is stored in LSB#1:
-		u_int e = "00 00 SSL_get_error FFSSL_E" */
+		uint e = "00 00 SSL_get_error FFSSL_E" */
 	FFSSL_EHANDSHAKE,
 	FFSSL_EREAD,
 	FFSSL_EWRITE,
@@ -102,7 +103,7 @@ static const char *const ffssl_funcstr[] = {
 const char* ffssl_error(int e, char *buf, size_t cap)
 {
 	ffstr s = { 0, buf };
-	u_int eio = ((u_int)e >> 8);
+	uint eio = ((uint)e >> 8);
 
 	ffstr_addfmt(&s, cap, "%s: ", ffssl_funcstr[e & 0xff]);
 
@@ -174,16 +175,16 @@ int ffssl_ctx_create(SSL_CTX **pctx)
 
 void ffssl_ctx_free(SSL_CTX *ctx) { SSL_CTX_free(ctx); }
 
-static void _ffssl_ctx_proto_allow(SSL_CTX *ctx, u_int protos)
+static void _ffssl_ctx_proto_allow(SSL_CTX *ctx, uint protos)
 {
 	if (protos == 0)
 		protos = FFSSL_PROTO_TLS1 | FFSSL_PROTO_TLS11 | FFSSL_PROTO_TLS12 | FFSSL_PROTO_TLS13;
 
-	u_int op = SSL_OP_NO_SSLv3;
-	static const u_int no_protos[] = {
+	uint op = SSL_OP_NO_SSLv3;
+	static const uint no_protos[] = {
 		SSL_OP_NO_TLSv1, SSL_OP_NO_TLSv1_1, SSL_OP_NO_TLSv1_2
 	};
-	for (u_int i = 0;  i != FF_COUNT(no_protos);  i++) {
+	for (uint i = 0;  i != FF_COUNT(no_protos);  i++) {
 		if (!(protos & (1 << i)))
 			op |= no_protos[i];
 	}
@@ -296,7 +297,7 @@ static int _ffssl_verify_cb(int preverify_ok, X509_STORE_CTX *x509ctx)
 	return verify(preverify_ok, x509ctx, udata);
 }
 
-int ffssl_ctx_ca(SSL_CTX *ctx, ffssl_verify_cb func, u_int verify_depth, const char *fn)
+int ffssl_ctx_ca(SSL_CTX *ctx, ffssl_verify_cb func, uint verify_depth, const char *fn)
 {
 	SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, &_ffssl_verify_cb);
 	SSL_CTX_set_verify_depth(ctx, verify_depth);
@@ -335,7 +336,7 @@ void ffssl_ctx_sess_del(SSL_CTX *ctx, SSL *c)
 }
 
 
-int ffssl_conn_create(SSL **con, SSL_CTX *ctx, u_int flags, struct ffssl_opt *opt)
+int ffssl_conn_create(SSL **con, SSL_CTX *ctx, uint flags, struct ffssl_opt *opt)
 {
 	SSL *c;
 	int e;
@@ -399,7 +400,7 @@ void ffssl_conn_setctx(SSL *c, SSL_CTX *ctx)
 	SSL_set_options(c, SSL_CTX_get_options(ctx));
 }
 
-size_t ffssl_conn_get(SSL *c, u_int flags)
+size_t ffssl_conn_get(SSL *c, uint flags)
 {
 	size_t r = 0;
 	switch (flags) {
@@ -415,7 +416,7 @@ size_t ffssl_conn_get(SSL *c, u_int flags)
 	return r;
 }
 
-void* ffssl_conn_getptr(SSL *c, u_int flags)
+void* ffssl_conn_getptr(SSL *c, uint flags)
 {
 	void *r = NULL;
 	switch (flags) {
@@ -570,7 +571,7 @@ static int async_bio_read(BIO *bio, char *buf, int len)
 	// let the user write directly to OpenSSL's buffer
 	iobuf->ptr = buf;
 	iobuf->len = len;
-	if ((u_int)len < rbuf->cap) {
+	if ((uint)len < rbuf->cap) {
 		// OpenSSL needs very little data, we want to use a bigger buffer
 		iobuf->ptr = rbuf->data;
 		iobuf->len = rbuf->cap;
@@ -645,7 +646,7 @@ void ffssl_cert_info(X509 *cert, struct ffssl_cert_info *info)
 	info->valid_until = time_from_ASN1time(X509_get_notAfter(cert));
 }
 
-X509* ffssl_cert_read(ffstr data, u_int flags)
+X509* ffssl_cert_read(ffstr data, uint flags)
 {
 	BIO *b;
 	X509 *x;
@@ -659,7 +660,7 @@ X509* ffssl_cert_read(ffstr data, u_int flags)
 	return x;
 }
 
-EVP_PKEY* ffssl_key_read(ffstr data, u_int flags)
+EVP_PKEY* ffssl_key_read(ffstr data, uint flags)
 {
 	BIO *b;
 	if (NULL == (b = BIO_new_mem_buf(data.ptr, data.len)))
@@ -671,7 +672,7 @@ EVP_PKEY* ffssl_key_read(ffstr data, u_int flags)
 	return key;
 }
 
-int ffssl_key_create(EVP_PKEY **key, u_int bits, u_int flags)
+int ffssl_key_create(EVP_PKEY **key, uint bits, uint flags)
 {
 	int r = -1;
 	EVP_PKEY *pk = NULL;
