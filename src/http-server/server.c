@@ -7,7 +7,7 @@
 #include <util/kq-kcq.h>
 #include <util/kq-timer.h>
 #include <util/kq-tq.h>
-#include <FFOS/perf.h>
+#include <ffsys/perf.h>
 
 struct nml_http_server {
 	struct nml_http_server_conf conf;

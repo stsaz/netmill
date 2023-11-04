@@ -8,8 +8,8 @@
 #include <util/http1.h>
 #include <util/http1-status.h>
 #include <util/conveyor-static.h>
-#include <FFOS/dir.h>
-#include <FFOS/timerqueue.h>
+#include <ffsys/dir.h>
+#include <ffsys/timerqueue.h>
 #include <ffbase/time.h>
 #include <ffbase/vector.h>
 

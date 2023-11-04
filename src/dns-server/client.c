@@ -2,7 +2,7 @@
 2023, Simon Zolin */
 
 #include <dns-server/client.h>
-#include <FFOS/perf.h>
+#include <ffsys/perf.h>
 
 static void cl_destroy(nml_dns_sv_conn *c)
 {

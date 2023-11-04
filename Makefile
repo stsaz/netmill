@@ -3,7 +3,7 @@
 ROOT_DIR := ..
 NETMILL := $(ROOT_DIR)/netmill
 FFBASE := $(ROOT_DIR)/ffbase
-FFOS := $(ROOT_DIR)/ffos
+FFSYS := $(ROOT_DIR)/ffsys
 
 include $(FFBASE)/conf.mk
 
@@ -22,7 +22,7 @@ ifeq "$(COMPILER)" "gcc"
 endif
 CFLAGS += -DFFBASE_HAVE_FFERR_STR
 CFLAGS += -MMD -MP
-CFLAGS += -I$(NETMILL)/src -I$(FFOS) -I$(FFBASE)
+CFLAGS += -I$(NETMILL)/src -I$(FFSYS) -I$(FFBASE)
 CFLAGS += -g
 ifeq "$(DEBUG)" "1"
 	CFLAGS += -DNML_ENABLE_LOG_EXTRA -DFF_DEBUG -O0

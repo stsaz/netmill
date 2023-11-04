@@ -105,7 +105,7 @@ include andk.mk
 ROOT_DIR := ../..
 NML_DIR := $(ROOT_DIR)/netmill
 FFBASE_DIR := $(ROOT_DIR)/ffbase
-FFOS_DIR := $(ROOT_DIR)/ffos
+FFSYS_DIR := $(ROOT_DIR)/ffsys
 
 LIB_DIR_AMD64 := $(NML_DIR)/android/netmill/libs/x86_64
 LIB_DIR_ARM64 := $(NML_DIR)/android/netmill/libs/arm64-v8a
@@ -131,7 +131,7 @@ else ifeq "$(CPU)" "arm"
 endif
 CFLAGS += -Wall -Wextra -Wno-unused-parameter -Wno-sign-compare
 CFLAGS += -DFFBASE_HAVE_FFERR_STR
-CFLAGS += -I $(NML_DIR)/src -I $(FFOS_DIR) -I $(FFBASE_DIR)
+CFLAGS += -I $(NML_DIR)/src -I $(FFSYS_DIR) -I $(FFBASE_DIR)
 ifeq "$(DEBUG)" "1"
 	CFLAGS += -g
 	CFLAGS += -DNML_ENABLE_LOG_EXTRA -DFF_DEBUG -O0

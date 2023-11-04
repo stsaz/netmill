@@ -32,7 +32,7 @@ Certificates:
 */
 
 #pragma once
-#include <FFOS/error.h>
+#include <ffsys/error.h>
 #include <ffbase/string.h>
 
 /** Get last error message */

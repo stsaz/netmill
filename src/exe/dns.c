@@ -4,7 +4,7 @@
 #include <exe/shared.h>
 #include <util/kq.h>
 #include <util/ipaddr.h>
-#include <FFOS/signal.h>
+#include <ffsys/signal.h>
 #include <ffbase/args.h>
 
 struct dns_sv_conf {

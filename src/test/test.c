@@ -1,7 +1,7 @@
 /** netmill: tester
 2023, Simon Zolin */
 
-#include <FFOS/test.h>
+#include <ffsys/test.h>
 #include <netmill.h>
 #include <util/kq.h>
 #include <util/kq-kcq.h>
@@ -10,11 +10,11 @@
 #include <util/kcq.h>
 #include <util/log.h>
 #include <util/taskqueue.h>
-#include <FFOS/timerqueue.h>
-#include <FFOS/ffos-extern.h>
+#include <ffsys/timerqueue.h>
+#include <ffsys/globals.h>
 
-uint _ffos_checks_success;
-uint _ffos_keep_running;
+uint _ffsys_checks_success;
+uint _ffsys_keep_running;
 
 struct tester {
 	uint test_num, test_data;
@@ -202,6 +202,6 @@ int main()
 	zzkq_destroy(&t->kq);
 	zzkcq_destroy(&t->kcq);
 
-	fflog("Test checks made: %u", _ffos_checks_success);
+	fflog("Test checks made: %u", _ffsys_checks_success);
 	return 0;
 }

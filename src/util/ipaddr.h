@@ -17,7 +17,7 @@ CONVERT
 
 #pragma once
 
-#include <FFOS/string.h>
+#include <ffsys/string.h>
 
 typedef struct { char a[4]; } ffip4;
 

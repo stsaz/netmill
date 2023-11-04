@@ -4,7 +4,7 @@
 #include <netmill.h>
 #include <exe/shared.h>
 #include <util/ssl.h>
-#include <FFOS/random.h>
+#include <ffsys/random.h>
 #include <ffbase/args.h>
 
 struct cert_conf {

@@ -5,8 +5,8 @@
 #include <util/jni-helper.h>
 #include <util/kcq.h>
 #include <util/ipaddr.h>
-#include <FFOS/thread.h>
-#include <FFOS/ffos-extern.h>
+#include <ffsys/thread.h>
+#include <ffsys/globals.h>
 #include <ffbase/vector.h>
 #include <android/log.h>
 

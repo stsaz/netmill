@@ -3,8 +3,8 @@
 
 #include <dns-server/client.h>
 #include <ffbase/map.h>
-#include <FFOS/perf.h>
-#include <FFOS/file.h>
+#include <ffsys/perf.h>
+#include <ffsys/file.h>
 
 #define syserror(conf, ...) \
 	conf->log(conf->log_obj, NML_LOG_SYSERR, "hosts", NULL, __VA_ARGS__)

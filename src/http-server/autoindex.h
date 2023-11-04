@@ -2,7 +2,7 @@
 2022, Simon Zolin */
 
 #include <http-server/client.h>
-#include <FFOS/dirscan.h>
+#include <ffsys/dirscan.h>
 
 static int nml_autoindex_open(nml_http_sv_conn *c)
 {

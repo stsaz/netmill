@@ -6,7 +6,7 @@
 mkdir netmill-src
 cd netmill-src
 git clone https://github.com/stsaz/ffbase
-git clone https://github.com/stsaz/ffos
+git clone https://github.com/stsaz/ffsys
 git clone https://github.com/stsaz/netmill
 cd netmill
 ```

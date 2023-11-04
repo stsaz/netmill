@@ -7,7 +7,7 @@
 #include <util/kq-timer.h>
 #include <util/kcq.h>
 #include <util/kq-kcq.h>
-#include <FFOS/perf.h>
+#include <ffsys/perf.h>
 
 #define nml_wrk_syserrlog(w, ...) \
 	w->conf.log(w->conf.log_obj, NML_LOG_SYSERR, w->conf.log_ctx, NULL, __VA_ARGS__)

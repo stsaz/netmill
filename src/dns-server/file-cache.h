@@ -2,7 +2,7 @@
 2023, Simon Zolin */
 
 #include <dns-server/client.h>
-#include <FFOS/dir.h>
+#include <ffsys/dir.h>
 
 #define syserror(conf, ...) \
 	conf->log(conf->log_obj, NML_LOG_SYSERR, "file-cache", NULL, __VA_ARGS__)

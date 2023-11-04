@@ -4,11 +4,11 @@
 #include <netmill.h>
 #include <exe/shared.h>
 #include <util/log.h>
-#include <FFOS/signal.h>
-#include <FFOS/thread.h>
-#include <FFOS/process.h>
-#include <FFOS/path.h>
-#include <FFOS/ffos-extern.h>
+#include <ffsys/signal.h>
+#include <ffsys/thread.h>
+#include <ffsys/process.h>
+#include <ffsys/path.h>
+#include <ffsys/globals.h>
 #include <ffbase/args.h>
 #ifdef FF_UNIX
 #include <sys/resource.h>

@@ -2,11 +2,11 @@
 2023, Simon Zolin */
 
 #pragma once
-#include <FFOS/socket.h>
-#include <FFOS/timerqueue.h>
-#include <FFOS/semaphore.h>
-#include <FFOS/queue.h>
-#include <FFOS/filemon.h>
+#include <ffsys/socket.h>
+#include <ffsys/timerqueue.h>
+#include <ffsys/semaphore.h>
+#include <ffsys/queue.h>
+#include <ffsys/filemon.h>
 #include <util/taskqueue.h>
 #include <ffbase/time.h>
 #include <ffbase/vector.h>

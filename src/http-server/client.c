@@ -3,8 +3,8 @@
 
 #include <http-server/client.h>
 #include <util/ipaddr.h>
-#include <FFOS/socket.h>
-#include <FFOS/file.h>
+#include <ffsys/socket.h>
+#include <ffsys/file.h>
 #include <ffbase/vector.h>
 
 static void cl_filters_run(nml_http_sv_conn *c);

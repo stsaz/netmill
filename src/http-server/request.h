@@ -2,8 +2,8 @@
 2022, Simon Zolin */
 
 #include <http-server/client.h>
-#include <FFOS/path.h>
-#include <FFOS/perf.h>
+#include <ffsys/path.h>
+#include <ffsys/perf.h>
 #include <ffbase/mem-print.h>
 
 static int nml_req_parse(nml_http_sv_conn *c);

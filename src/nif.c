@@ -42,7 +42,7 @@ static inline int _nml_nif_info(struct nml_nif_info *i, ffvec *nifs)
 
 #elif defined FF_LINUX
 
-#include <FFOS/netlink.h>
+#include <ffsys/netlink.h>
 
 static inline int _nml_nif_info(struct nml_nif_info *i, ffvec *nifs)
 {

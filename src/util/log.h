@@ -2,8 +2,8 @@
 2022, Simon Zolin */
 
 #pragma once
-#include <FFOS/std.h>
-#include <FFOS/thread.h> // optional
+#include <ffsys/std.h>
+#include <ffsys/thread.h> // optional
 
 struct zzlog {
 	fffd fd;

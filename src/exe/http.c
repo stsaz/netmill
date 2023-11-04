@@ -3,10 +3,10 @@
 
 #include <exe/shared.h>
 #include <util/ipaddr.h>
-#include <FFOS/sysconf.h>
-#include <FFOS/process.h>
-#include <FFOS/path.h>
-#include <FFOS/std.h>
+#include <ffsys/sysconf.h>
+#include <ffsys/process.h>
+#include <ffsys/path.h>
+#include <ffsys/std.h>
 #include <ffbase/args.h>
 
 struct http_sv_conf {

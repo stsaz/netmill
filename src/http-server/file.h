@@ -3,7 +3,7 @@
 
 #include <http-server/client.h>
 #include <util/ltconf.h>
-#include <FFOS/kcall.h>
+#include <ffsys/kcall.h>
 #include <ffbase/map.h>
 
 static int nml_file_open(nml_http_sv_conn *c)

@@ -18,7 +18,7 @@ fi
 
 SRC=$1
 mkdir -p /tmp/src
-cp -rua $SRC/ffbase $SRC/ffos $SRC/netmill /tmp/src
+cp -rua $SRC/ffbase $SRC/ffsys $SRC/netmill /tmp/src
 sudo docker container exec -it alpine_c_builder make -j8 -C /src/netmill CFLAGS_USER=-DFF_MUSL
 cd /tmp/src/netmill
 sudo make docker

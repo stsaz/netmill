@@ -4,7 +4,7 @@
 #include <netmill.h>
 #include <util/kq.h>
 #include <util/ipaddr.h>
-#include <FFOS/socket.h>
+#include <ffsys/socket.h>
 
 struct nml_udp_listener {
 	struct nml_udp_listener_conf conf;

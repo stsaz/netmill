@@ -3,7 +3,7 @@
 
 typedef unsigned int uint;
 #include "ssl.h"
-#include <FFOS/error.h>
+#include <ffsys/error.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
