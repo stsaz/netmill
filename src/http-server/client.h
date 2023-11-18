@@ -182,7 +182,7 @@ static inline int cl_async(nml_http_sv_conn *c)
 {
 	if (!c->kq_attached) {
 		c->kq_attached = 1;
-		if (0 != c->conf->core.kq_attach(c->conf->boss, c->sk, c->kev, c)) {
+		if (c->conf->core.kq_attach(c->conf->boss, c->sk, c->kev, c)) {
 			c->conf->cl_destroy(c);
 			return -1;
 		}

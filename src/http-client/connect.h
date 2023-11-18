@@ -3,13 +3,15 @@
 
 #include <http-client/client.h>
 
-static int nml_connect_open(nml_http_client *c)
+static int http_cl_connect_open(nml_http_client *c)
 {
+	if (c->connection_from_cache)
+		return NMLF_SKIP;
 	c->sk = FFSOCK_NULL;
 	return NMLF_OPEN;
 }
 
-static void nml_connect_close(nml_http_client *c)
+static void http_cl_connect_close(nml_http_client *c)
 {
 	ffsock_close(c->sk);  c->sk = FFSOCK_NULL;
 }
@@ -28,10 +30,10 @@ static int nml_connect_prepare(nml_http_client *c)
 		return NMLF_ERR;
 	}
 
-	if (0 != ffsock_setopt(c->sk, IPPROTO_TCP, TCP_NODELAY, 1))
+	if (ffsock_setopt(c->sk, IPPROTO_TCP, TCP_NODELAY, 1))
 		cl_syswarnlog(c, "ffsock_setopt(TCP_NODELAY)");
 
-	if (0 != c->conf->core.kq_attach(c->conf->boss, c->sk, c->kev, c)) {
+	if (c->conf->core.kq_attach(c->conf->boss, c->sk, c->kev, c)) {
 		return NMLF_ERR;
 	}
 
@@ -79,7 +81,7 @@ static int nml_connect(nml_http_client *c)
 	return NMLF_FWD;
 }
 
-static int nml_connect_process(nml_http_client *c)
+static int http_cl_connect_process(nml_http_client *c)
 {
 	for (;;) {
 
@@ -113,7 +115,7 @@ next:
 	return NMLF_DONE;
 }
 
-const struct nml_filter nml_filter_connect = {
-	(void*)nml_connect_open, (void*)nml_connect_close, (void*)nml_connect_process,
+const nml_http_cl_component nml_http_cl_connect = {
+	http_cl_connect_open, http_cl_connect_close, http_cl_connect_process,
 	"connect"
 };

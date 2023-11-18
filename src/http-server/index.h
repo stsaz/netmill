@@ -4,7 +4,7 @@
 #include <http-server/client.h>
 #include <ffsys/file.h>
 
-static int nml_index_open(nml_http_sv_conn *c)
+static int http_sv_index_open(nml_http_sv_conn *c)
 {
 	if (c->resp_err || c->resp.code != 0
 		|| *ffstr_last(&c->req.unescaped_path) != '/')
@@ -13,15 +13,15 @@ static int nml_index_open(nml_http_sv_conn *c)
 	return NMLF_OPEN;
 }
 
-static void nml_index_close(nml_http_sv_conn *c)
+static void http_sv_index_close(nml_http_sv_conn *c)
 {
 	ffvec_free(&c->index.buf);
 }
 
 /** ".../" -> ".../index.html" */
-static int nml_index_process(nml_http_sv_conn *c)
+static int http_sv_index_process(nml_http_sv_conn *c)
 {
-	if (0 == ffvec_addfmt(&c->index.buf, "%S%S%S%Z"
+	if (!ffvec_addfmt(&c->index.buf, "%S%S%S%Z"
 		, &c->conf->fs.www, &c->req.unescaped_path, &c->conf->fs.index_filename)) {
 		cl_errlog(c, "no memory");
 		cl_resp_status(c, HTTP_500_INTERNAL_SERVER_ERROR);
@@ -41,7 +41,7 @@ static int nml_index_process(nml_http_sv_conn *c)
 	ffvec_free(&c->index.buf);
 
 	ffsize cap = c->req.unescaped_path.len;
-	if (0 == ffstr_growadd2(&c->req.unescaped_path, &cap, &c->conf->fs.index_filename)) {
+	if (!ffstr_growadd2(&c->req.unescaped_path, &cap, &c->conf->fs.index_filename)) {
 		cl_errlog(c, "no memory");
 		cl_resp_status(c, HTTP_500_INTERNAL_SERVER_ERROR);
 		return NMLF_DONE;
@@ -49,7 +49,7 @@ static int nml_index_process(nml_http_sv_conn *c)
 	return NMLF_DONE;
 }
 
-const struct nml_filter nml_filter_index = {
-	(void*)nml_index_open, (void*)nml_index_close, (void*)nml_index_process,
+const nml_http_sv_component nml_http_sv_index = {
+	http_sv_index_open, http_sv_index_close, http_sv_index_process,
 	"index"
 };

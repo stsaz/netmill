@@ -16,7 +16,7 @@ struct cert_conf {
 	uint	serial;
 };
 
-static int cert_pem_create(const char *fn, uint pkey_bits, struct ffssl_cert_newinfo *ci)
+int cert_pem_create(const char *fn, uint pkey_bits, struct ffssl_cert_newinfo *ci)
 {
 	int r = 1;
 	ffvec buf = {};

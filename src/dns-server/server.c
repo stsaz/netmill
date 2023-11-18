@@ -73,6 +73,9 @@ int nml_dns_server_conf(nml_dns_server *s, struct nml_dns_server_conf *conf)
 		return 0;
 	}
 
+	if (!conf->chain)
+		return -1;
+
 	s->conf = conf;
 
 	struct nml_wrk_conf wc = {

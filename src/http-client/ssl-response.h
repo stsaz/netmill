@@ -1,7 +1,7 @@
 /** netmill: http-client: SSL response decryption filter
 2023, Simon Zolin */
 
-static int nml_ssl_resp_open(nml_http_client *c)
+static int http_cl_ssl_resp_open(nml_http_client *c)
 {
 	if (NULL == ffvec_alloc(&c->recv.buf, 4096, 1)) {
 		cl_warnlog(c, "no memory");
@@ -10,13 +10,13 @@ static int nml_ssl_resp_open(nml_http_client *c)
 	return NMLF_OPEN;
 }
 
-static void nml_ssl_resp_close(nml_http_client *c)
+static void http_cl_ssl_resp_close(nml_http_client *c)
 {
 	ffvec_free(&c->recv.buf);
 	ffvec_free(&c->recv.body);
 }
 
-static int nml_ssl_resp_process(nml_http_client *c)
+static int http_cl_ssl_resp_process(nml_http_client *c)
 {
 	if (c->recv_fin)
 		return NMLF_ERR;
@@ -34,7 +34,7 @@ static int nml_ssl_resp_process(nml_http_client *c)
 			return NMLF_ERR;
 		}
 
-		if (0 == ffvec_unused(buf)
+		if (!ffvec_unused(buf)
 			&& NULL == ffvec_grow(buf, c->conf->receive.hdr_buf_size, 1)) {
 			cl_errlog(c, "no memory");
 			return NMLF_ERR;
@@ -71,7 +71,7 @@ static int nml_ssl_resp_process(nml_http_client *c)
 	return NMLF_FWD;
 }
 
-const struct nml_filter nml_filter_ssl_resp = {
-	(void*)nml_ssl_resp_open, (void*)nml_ssl_resp_close, (void*)nml_ssl_resp_process,
+const nml_http_cl_component nml_http_cl_ssl_resp = {
+	http_cl_ssl_resp_open, http_cl_ssl_resp_close, http_cl_ssl_resp_process,
 	"ssl-resp"
 };

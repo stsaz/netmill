@@ -4,15 +4,18 @@
 #include <exe/shared.h>
 #include <util/kq.h>
 #include <util/ipaddr.h>
+#include <util/ssl.h>
 #include <ffsys/signal.h>
 #include <ffbase/args.h>
 
 struct dns_sv_conf {
 	struct nml_address listen_addr[2];
 	struct nml_dns_server_conf sv;
-	ffbyte block_aaaa;
-	ffbyte monitor;
-	char *cache_dir;
+	u_char	block_aaaa;
+	u_char	monitor;
+	char*	cache_dir;
+	char*	cert_key_file, *cert_key_file_buf;
+	uint	have_doh;
 
 #ifdef FF_UNIX
 	ffkqsig kqsig;
@@ -40,6 +43,7 @@ static const job_if dns_serv;
 
 static int dns_cmd_upstream(struct dns_sv_conf *conf, const char *val)
 {
+	conf->have_doh |= ffsz_matchz(val, "https://");
 	*ffvec_pushT(&conf->sv.upstreams.upstreams, const char*) = val;
 	return 0;
 }
@@ -107,9 +111,14 @@ Options:\n\
   min-ttl N         Minimum TTL value for a cached no-error response\n\
   error-ttl N       Minimum TTL value for a cached error response\n\
 \n\
-  upstream ADDR         Upstream server address\n\
+  upstream ADDR         Upstream server address:\n\
+                          \"https://HOST\"  DNS/HTTPS (HOST's IP address is resolved via 'hosts' files)\n\
+                          \"IP\"            DNS/UDP\n\
   read-timeout N        Response receive timeout (msec) (def: 300)\n\
   resend-attempts N     Number of request re-send attempts after timeout (def: 2)\n\
+\n\
+DoH:\n\
+  cert FILE             Set certificate & private-key PEM file (def: client.pem)\n\
 \n\
 Signal handlers:\n\
   SIGHUP    Refresh lists\n\
@@ -124,6 +133,7 @@ static const struct ffarg dns_args[] = {
 	{ "block-mode",		'S',	dns_cmd_block_mode },
 	{ "block-ttl",		'u',	O(sv.hosts.block_ttl) },
 	{ "cache-dir",		's',	dns_cmd_cache_dir },
+	{ "cert",			's',	O(cert_key_file) },
 	{ "error-ttl",		'u',	O(sv.filecache.error_ttl) },
 	{ "help",			'1',	dns_cmd_help },
 	{ "hosts",			'+s',	dns_cmd_hosts },
@@ -182,7 +192,65 @@ static void* dns_wrk_create()
 	return s;
 }
 
-extern const struct nml_filter* nml_dns_server_filters[];
+extern int cert_pem_create(const char *fn, uint pkey_bits, struct ffssl_cert_newinfo *ci);
+
+static struct nml_ssl_ctx* dns_sv_ssl_prepare()
+{
+	struct nml_ssl_ctx *sc = ffmem_new(struct nml_ssl_ctx);
+	struct ffssl_ctx_conf *scc = ffmem_new(struct ffssl_ctx_conf);
+	sc->ctx_conf = scc;
+
+	if (!dc->cert_key_file) {
+		dc->cert_key_file = dc->cert_key_file_buf = ffsz_allocfmt("%S/client.pem", &x->conf.root_dir);
+		if (!fffile_exists(dc->cert_key_file)) {
+			fftime now;
+			fftime_now(&now);
+			struct ffssl_cert_newinfo ci = {
+				.subject = FFSTR_Z("/O=test"),
+				.from_time = now.sec,
+				.until_time = now.sec + 10*365*24*60*60,
+			};
+			cert_pem_create(dc->cert_key_file, 2048, &ci);
+			infolog("generated certificate file: %s", dc->cert_key_file);
+		}
+	}
+
+	scc->cert_file = dc->cert_key_file;
+	scc->pkey_file = dc->cert_key_file;
+	scc->allowed_protocols = FFSSL_PROTO_TLS13;
+
+	sc->log_level = x->conf.log_level;
+	sc->log_obj = x;
+	sc->log = exe_log;
+
+	if (nml_ssl_init(sc))
+		return NULL;
+
+	return sc;
+}
+
+extern void nml_http_cl_conn_cache_destroy(void *opaque, ffstr name, ffstr data);
+
+static void* dns_sv_doh_conn_cache()
+{
+	struct nml_cache_conf *cconf = ffmem_new(struct nml_cache_conf);
+	nml_cache_conf(NULL, cconf);
+
+	cconf->log_level = x->conf.log_level;
+	cconf->log = exe_log;
+	cconf->log_obj = x;
+
+	cconf->max_items = 60000;
+	cconf->destroy = nml_http_cl_conn_cache_destroy;
+	cconf->opaque = NULL;
+
+	nml_cache_ctx *cc = nml_cache_create();
+	if (!cc) return NULL;
+	nml_cache_conf(cc, cconf);
+	return cc;
+}
+
+extern const nml_dns_component* nml_dns_server_chain[];
 
 static int dns_setup()
 {
@@ -193,7 +261,15 @@ static int dns_setup()
 	sc->server.conn_id_counter = &x->conn_id;
 	sc->server.reuse_port = 1;
 
-	sc->filters = (void*)nml_dns_server_filters;
+	sc->chain = nml_dns_server_chain;
+
+	if (dc->have_doh
+		&& !(sc->upstreams.doh_ssl_ctx = dns_sv_ssl_prepare()))
+		return -1;
+
+	if (dc->have_doh
+		&& !(sc->upstreams.doh_connection_cache = dns_sv_doh_conn_cache()))
+		return -1;
 
 	if (!ffvec_zallocT(&x->workers, 1, struct worker))
 		return -1;
@@ -235,19 +311,21 @@ static void dns_destroy()
 	}
 
 	struct dns_sv_conf *conf = dc;
-	nml_dns_upstreams_uninit(&conf->sv);
-	nml_dns_hosts_uninit(&conf->sv);
+	struct nml_dns_server_conf *dsc = &conf->sv;
+	nml_dns_upstreams_uninit(dsc);
+	nml_dns_hosts_uninit(dsc);
+	nml_cache_destroy(dsc->upstreams.doh_connection_cache);
 
 	FFSLICE_WALK(&x->workers, w) {
 #ifdef FF_UNIX
 		if (w->dns)
-			ffkqsig_detach(conf->kqsig, conf->sv.core.kq(conf->sv.boss));
+			ffkqsig_detach(conf->kqsig, dsc->core.kq(dsc->boss));
 #endif
 		nml_dns_server_free(w->dns);
 	}
 
-	ffvec_free(&conf->sv.upstreams.upstreams);
-	ffvec_free(&conf->sv.hosts.filenames);
+	ffvec_free(&dsc->upstreams.upstreams);
+	ffvec_free(&dsc->hosts.filenames);
 	ffmem_free(conf->cache_dir);
 	ffmem_free(conf);
 }

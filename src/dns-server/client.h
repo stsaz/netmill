@@ -7,6 +7,8 @@
 #include <util/dns.h>
 #include <util/conveyor-static.h>
 
+#define NML_ASSERT(X)  assert(X)
+
 #define cl_syswarnlog(c, ...) \
 	c->conf->log(c->conf->log_obj, NML_LOG_SYSWARN, "dns-sv", c->id, __VA_ARGS__)
 
@@ -56,6 +58,7 @@ static inline void dns_msg_destroy(struct dns_msg *msg)
 	ffvec_free(&msg->answers);
 }
 
+struct nml_doh;
 struct nml_dns_sv_conn {
 	struct nml_dns_server_conf *conf;
 	fftime tstart;
@@ -78,8 +81,13 @@ struct nml_dns_sv_conn {
 	/** The current data passed between filters */
 	ffstr input, output;
 
+	void *upstream_active_ctx;
+	struct nml_doh *doh;
+
 	uint chain_going_back :1;
 	uint chain_reset :1;
 	uint resp_ready :1;
 	uint upstream_resp :1;
+	uint upstream_timeout :1;
+	uint upstream_doh :1;
 };

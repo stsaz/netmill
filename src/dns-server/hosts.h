@@ -97,10 +97,10 @@ static uint source_count_hosts(const ffstr *data, uint *_n_ip)
 			if (type < 0) {
 				// detect line format
 				ffip6 ip;
-				if (0 == ffip4_parse((ffip4*)&ip, host.ptr, host.len)) {
+				if (!ffip4_parse((ffip4*)&ip, host.ptr, host.len)) {
 					type = T_IPV4;
 					continue;
-				} else if (0 == ffip6_parse(&ip, host.ptr, host.len)) {
+				} else if (!ffip6_parse(&ip, host.ptr, host.len)) {
 					type = T_IPV6;
 					continue;
 				}
@@ -171,12 +171,12 @@ static int source_parse(struct nml_dns_server_conf *conf, struct source *src, ff
 					host.ptr += 2;
 					host.len -= 3;
 
-				} else if (0 == ffip4_parse((ffip4*)&ipaddr, host.ptr, host.len)) {
+				} else if (!ffip4_parse((ffip4*)&ipaddr, host.ptr, host.len)) {
 					ipstr = host;
 					type = T_IPV4;
 					continue; // the first field is an IP
 
-				} else if (0 == ffip6_parse(&ipaddr, host.ptr, host.len)) {
+				} else if (!ffip6_parse(&ipaddr, host.ptr, host.len)) {
 					ipstr = host;
 					type = T_IPV6;
 					continue; // the first field is an IP
@@ -279,7 +279,7 @@ static int source_parse(struct nml_dns_server_conf *conf, struct source *src, ff
 	src->entries_ip = entries_ip;
 
 	fffileinfo fi;
-	if (0 == fffile_info_path(src->name.ptr, &fi))
+	if (!fffile_info_path(src->name.ptr, &fi))
 		src->mtime = fffileinfo_mtime(&fi);
 
 	rc = 0;
@@ -370,10 +370,25 @@ static int hosts_find(struct nml_dns_server_conf *conf, const ffdns_question *q,
 	return t;
 }
 
+int nml_dns_hosts_find(struct nml_dns_server_conf *conf, ffstr name, ffip6 *ip)
+{
+	ffdns_question q = {};
+	ffvec_set2(&q.name, &name);
+	q.type = FFDNS_A;
+	int t = hosts_find(conf, &q, ip);
+	if (t == T_IPV4) {
+		ffip6_v4mapped_set(ip, (void*)ip);
+		return 4;
+	// } else if (t == T_IPV6) {
+	// 	return 6;
+	}
+	return -1;
+}
+
 /** Add existing hosts to a map */
 static int source_addhosts(struct nml_dns_server_conf *conf, struct source *src)
 {
-	if (0 != ffmap_grow(&conf->hosts.index, src->entries.len))
+	if (ffmap_grow(&conf->hosts.index, src->entries.len))
 		return -1;
 
 	struct entry *ent;
@@ -438,7 +453,7 @@ void nml_dns_hosts_refresh(struct nml_dns_server_conf *conf)
 	FFSLICE_WALK(&conf->hosts.sources, src) {
 
 		fffileinfo fi;
-		if (!!fffile_info_path(src->name.ptr, &fi)) {
+		if (fffile_info_path(src->name.ptr, &fi)) {
 			syswarning(conf, "file info: %s", src->name.ptr);
 			continue;
 		}
@@ -504,7 +519,7 @@ static void hosts_monitor_change(struct nml_dns_server_conf *conf)
 
 	conf->hosts.fm_kev.rhandler = hosts_on_change;
 	conf->hosts.fm_kev.rtask.active = 1;
-	if (0 != conf->core.kq_attach(conf->boss, conf->hosts.fm, &conf->hosts.fm_kev, conf))
+	if (conf->core.kq_attach(conf->boss, conf->hosts.fm, &conf->hosts.fm_kev, conf))
 		return;
 
 	struct source *src;
@@ -541,14 +556,14 @@ void nml_dns_hosts_uninit(struct nml_dns_server_conf *conf)
 	ffvec_free(&conf->hosts.sources);
 }
 
-static int nml_dns_hosts_open(nml_dns_sv_conn *c)
+static int dns_hosts_open(nml_dns_sv_conn *c)
 {
 	if (c->status)
 		return NMLF_SKIP;
 	return NMLF_OPEN;
 }
 
-static void nml_dns_hosts_close(nml_dns_sv_conn *c)
+static void dns_hosts_close(nml_dns_sv_conn *c)
 {
 }
 
@@ -602,7 +617,7 @@ static int block_resp(nml_dns_sv_conn *c)
 	return NMLF_DONE;
 }
 
-static int nml_dns_hosts_process(nml_dns_sv_conn *c)
+static int dns_hosts_process(nml_dns_sv_conn *c)
 {
 	if (c->req.q.type == FFDNS_AAAA && c->conf->hosts.block_aaaa) {
 		c->status = "aaaa-block";
@@ -633,8 +648,8 @@ static int nml_dns_hosts_process(nml_dns_sv_conn *c)
 	return NMLF_DONE;
 }
 
-const struct nml_filter nml_filter_dns_hosts = {
-	(void*)nml_dns_hosts_open, (void*)nml_dns_hosts_close, (void*)nml_dns_hosts_process,
+const nml_dns_component nml_dns_hosts = {
+	dns_hosts_open, dns_hosts_close, dns_hosts_process,
 	"hosts"
 };
 

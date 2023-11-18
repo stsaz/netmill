@@ -26,7 +26,7 @@ static inline int zzkq_timer_create(struct zzkq_timer *kt, ffkq kq, ffuint inter
 	kt->kev.rhandler = func;
 	kt->kev.obj = param;
 	kt->kev.rtask.active = 1;
-	if (0 != fftimer_start(kt->timer, kq, &kt->kev, interval_msec))
+	if (fftimer_start(kt->timer, kq, &kt->kev, interval_msec))
 		return -1;
 	return 0;
 }

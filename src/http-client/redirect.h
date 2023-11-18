@@ -3,7 +3,7 @@
 
 #include <http-client/client.h>
 
-static int nml_redir_open(nml_http_client *c)
+static int http_cl_redir_open(nml_http_client *c)
 {
 	if ((c->response.code == 301 || c->response.code == 302)
 		&& c->response.location.len
@@ -12,12 +12,12 @@ static int nml_redir_open(nml_http_client *c)
 	return NMLF_SKIP;
 }
 
-static void nml_redir_close(nml_http_client *c)
+static void http_cl_redir_close(nml_http_client *c)
 {
 	ffmem_zero(&c->input, sizeof(nml_http_client) - FF_OFF(nml_http_client, input));
 }
 
-static int nml_redir_process(nml_http_client *c)
+static int http_cl_redir_process(nml_http_client *c)
 {
 	ffstr loc = range16_tostr(&c->response.location, c->response.base);
 	cl_verblog(c, "redirect: %S", &loc);
@@ -59,7 +59,7 @@ static int nml_redir_process(nml_http_client *c)
 	return NMLF_RESET;
 }
 
-const struct nml_filter nml_filter_redir = {
-	(void*)nml_redir_open, (void*)nml_redir_close, (void*)nml_redir_process,
+const nml_http_cl_component nml_http_cl_redir = {
+	http_cl_redir_open, http_cl_redir_close, http_cl_redir_process,
 	"redirect"
 };

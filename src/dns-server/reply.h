@@ -4,16 +4,16 @@
 #include <dns-server/client.h>
 #include <ffbase/mem-print.h>
 
-static int nml_dns_reply_open(nml_dns_sv_conn *c)
+static int dns_reply_open(nml_dns_sv_conn *c)
 {
 	return NMLF_OPEN;
 }
 
-static void nml_dns_reply_close(nml_dns_sv_conn *c)
+static void dns_reply_close(nml_dns_sv_conn *c)
 {
 }
 
-static int nml_dns_reply_process(nml_dns_sv_conn *c)
+static int dns_reply_process(nml_dns_sv_conn *c)
 {
 	int r = ffsock_sendto(c->sk, c->respbuf.ptr, c->respbuf.len, 0, &c->peer);
 	if (r < 0) {
@@ -35,7 +35,7 @@ static int nml_dns_reply_process(nml_dns_sv_conn *c)
 	return NMLF_FIN;
 }
 
-const struct nml_filter nml_filter_dns_reply = {
-	(void*)nml_dns_reply_open, (void*)nml_dns_reply_close, (void*)nml_dns_reply_process,
+const nml_dns_component nml_dns_reply = {
+	dns_reply_open, dns_reply_close, dns_reply_process,
 	"reply"
 };

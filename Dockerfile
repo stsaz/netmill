@@ -1,5 +1,4 @@
 FROM alpine:3.18
-COPY ./netmill-0 /netmill-0
+COPY ./netmill-0/  /netmill-0/
 ENTRYPOINT [ "/netmill-0/netmill" ]
-# CMD ...
-EXPOSE 80
+EXPOSE 53/udp 80

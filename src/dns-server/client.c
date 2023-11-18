@@ -23,11 +23,11 @@ static const char nmlf_r_str[][11] = {
 	"NMLF_SKIP",
 };
 
-/** Call the current filter */
-static int conveyor_filter_call(nml_dns_sv_conn *c, uint i)
+/** Call the current component */
+static int conveyor_component_call(nml_dns_sv_conn *c, uint i)
 {
 	struct nml_conveyor *v = &c->conveyor;
-	const struct nml_filter *f = v->filters[i];
+	const nml_dns_component *f = (nml_dns_component*)v->filters[i];
 	int r;
 
 	if (!v->rt[i].opened) {
@@ -58,7 +58,7 @@ void cl_filters_run(nml_dns_sv_conn *c)
 			if (r == NMLF_FWD)
 				c->output = c->input;
 		} else {
-			r = conveyor_filter_call(c, i);
+			r = conveyor_component_call(c, i);
 		}
 
 		switch (r) {
@@ -163,7 +163,7 @@ void dns_cl_start(struct nml_dns_server_conf *conf, uint conn_id, ffsock sk, ffs
 
 	c->reqbuf = request;
 
-	conveyor_init(&c->conveyor, c->conf->filters);
+	conveyor_init(&c->conveyor, (const nml_component**)c->conf->chain);
 	conveyor_log_init(&c->conveyor, c->id, c->conf);
 	cl_filters_run(c);
 }

@@ -3,7 +3,7 @@
 
 #include <http-client/client.h>
 
-static int nml_hc_transfer_open(nml_http_client *c)
+static int http_cl_transfer_open(nml_http_client *c)
 {	
 	if (c->response_chunked) {
 	} else if (c->response.content_length != ~0ULL) {
@@ -13,11 +13,11 @@ static int nml_hc_transfer_open(nml_http_client *c)
 	return NMLF_OPEN;
 }
 
-static void nml_hc_transfer_close(nml_http_client *c)
+static void http_cl_transfer_close(nml_http_client *c)
 {
 }
 
-static int nml_hc_transfer_process(nml_http_client *c)
+static int http_cl_transfer_process(nml_http_client *c)
 {
 	if (!c->chain_going_back)
 		c->transfer.data = c->input;
@@ -67,7 +67,7 @@ static int nml_hc_transfer_process(nml_http_client *c)
 	return NMLF_FWD;
 }
 
-const struct nml_filter nml_filter_http_cl_transfer = {
-	(void*)nml_hc_transfer_open, (void*)nml_hc_transfer_close, (void*)nml_hc_transfer_process,
+const nml_http_cl_component nml_http_cl_transfer = {
+	http_cl_transfer_open, http_cl_transfer_close, http_cl_transfer_process,
 	"transfer"
 };

@@ -4,6 +4,10 @@
 void exe_log(void *opaque, uint level, const char *ctx, const char *id, const char *fmt, ...)
 {
 	struct exe *x = opaque;
+
+	if (level > x->conf.log_level)
+		return;
+
 	va_list va;
 	va_start(va, fmt);
 

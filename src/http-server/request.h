@@ -6,15 +6,15 @@
 #include <ffsys/perf.h>
 #include <ffbase/mem-print.h>
 
-static int nml_req_parse(nml_http_sv_conn *c);
+static int http_sv_req_parse(nml_http_sv_conn *c);
 
-static int nml_req_open(nml_http_sv_conn *c)
+static int http_sv_req_open(nml_http_sv_conn *c)
 {
 	c->resp.content_length = (ffuint64)-1;
 	return NMLF_OPEN;
 }
 
-static void nml_req_close(nml_http_sv_conn *c)
+static void http_sv_req_close(nml_http_sv_conn *c)
 {
 	if (c->chain_reset) {
 		// preserve pipelined data
@@ -26,13 +26,13 @@ static void nml_req_close(nml_http_sv_conn *c)
 	ffstr_free(&c->req.unescaped_path);
 }
 
-static int nml_req_read(nml_http_sv_conn *c)
+static int http_sv_req_read(nml_http_sv_conn *c)
 {
 	if (c->req_unprocessed_data) {
 		c->req_unprocessed_data = 0;
 	}
 
-	int r = nml_req_parse(c);
+	int r = http_sv_req_parse(c);
 	if (r == 0) {
 		c->output = c->input;
 		ffstr_shift(&c->output, c->req.full.len);
@@ -60,7 +60,7 @@ static int nml_req_read(nml_http_sv_conn *c)
 /**
 Return 0 if request is complete
  >0 if need more data */
-static int nml_req_parse(nml_http_sv_conn *c)
+static int http_sv_req_parse(nml_http_sv_conn *c)
 {
 	char *buf = c->input.ptr;
 	ffstr req = FFSTR_INITSTR(&c->input), method, url, proto;
@@ -173,7 +173,7 @@ err:
 	return -1;
 }
 
-const struct nml_filter nml_filter_request = {
-	(void*)nml_req_open, (void*)nml_req_close, (void*)nml_req_read,
+const nml_http_sv_component nml_http_sv_request = {
+	http_sv_req_open, http_sv_req_close, http_sv_req_read,
 	"req-parse"
 };

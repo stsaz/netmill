@@ -2,11 +2,11 @@
 2022, Simon Zolin */
 
 #include <http-server/client.h>
-#include <util/ltconf.h>
 #include <ffsys/kcall.h>
+#include <ffbase/conf.h>
 #include <ffbase/map.h>
 
-static int nml_file_open(nml_http_sv_conn *c)
+static int http_sv_file_open(nml_http_sv_conn *c)
 {
 	if (c->resp_err || c->resp.code != 0)
 		return NMLF_SKIP;
@@ -37,7 +37,7 @@ static int nml_file_open(nml_http_sv_conn *c)
 	return NMLF_OPEN;
 }
 
-static void nml_file_close(nml_http_sv_conn *c)
+static void http_sv_file_close(nml_http_sv_conn *c)
 {
 	if (c->file.f != FFFILE_NULL) {
 		fffile_close(c->file.f);
@@ -102,17 +102,17 @@ void nml_http_file_init(struct nml_http_server_conf *conf, ffstr content_types)
 	ffmap_init(&conf->fs.content_types_map, ctmap_keyeq);
 	ffmap_alloc(&conf->fs.content_types_map, 16);
 	ffstr in = content_types, out, ct = {};
-	struct ltconf ltc = {};
+	struct ffconf c = {};
 
 	for (;;) {
-		int r = ltconf_read(&ltc, &in, &out);
+		int r = ffconf_read(&c, &in, &out);
 
 		switch (r) {
-		case LTCONF_KEY:
+		case FFCONF_KEY:
 			ct = out;
 			break;
-		case LTCONF_VAL:
-		case LTCONF_VAL_NEXT: {
+		case FFCONF_VAL:
+		case FFCONF_VAL_NEXT: {
 			if (out.len > 4)
 				return;
 			range16 k, v;
@@ -123,8 +123,8 @@ void nml_http_file_init(struct nml_http_server_conf *conf, ffstr content_types)
 			break;
 		}
 
-		case LTCONF_MORE:
-		case LTCONF_ERROR:
+		case FFCONF_MORE:
+		case FFCONF_ERROR:
 		default:
 			return;
 		}
@@ -189,7 +189,7 @@ static int f_info(nml_http_sv_conn *c)
 	if (cl_kcq_active(c))
 		cl_dbglog(c, "fffile_info: completed");
 
-	if (0 != fffile_info_async(c->file.f, &c->file.info, cl_kcq(c))) {
+	if (fffile_info_async(c->file.f, &c->file.info, cl_kcq(c))) {
 		if (fferr_last() == FFKCALL_EINPROGRESS) {
 			cl_dbglog(c, "fffile_info: in progress");
 			return NMLF_ASYNC;
@@ -199,9 +199,9 @@ static int f_info(nml_http_sv_conn *c)
 		return NMLF_DONE;
 	}
 
-	if (0 != handle_redirect(c, &c->file.info))
+	if (handle_redirect(c, &c->file.info))
 		return NMLF_DONE;
-	if (0 != mtime(c, &c->file.info))
+	if (mtime(c, &c->file.info))
 		return NMLF_DONE;
 	content_type(c);
 
@@ -216,7 +216,7 @@ static int f_info(nml_http_sv_conn *c)
 	return NMLF_FWD;
 }
 
-static int nml_file_process(nml_http_sv_conn *c)
+static int http_sv_file_process(nml_http_sv_conn *c)
 {
 	ffssize r;
 	switch (c->file.state) {
@@ -251,7 +251,7 @@ static int nml_file_process(nml_http_sv_conn *c)
 	return NMLF_FWD;
 }
 
-const struct nml_filter nml_filter_file = {
-	(void*)nml_file_open, (void*)nml_file_close, (void*)nml_file_process,
+const nml_http_sv_component nml_http_sv_file = {
+	http_sv_file_open, http_sv_file_close, http_sv_file_process,
 	"file"
 };

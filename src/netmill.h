@@ -8,17 +8,17 @@
 #include <ffsys/queue.h>
 #include <ffsys/filemon.h>
 #include <util/taskqueue.h>
+#include <util/ipaddr.h>
 #include <ffbase/time.h>
 #include <ffbase/vector.h>
 #include <ffbase/map.h>
 
-#define NML_VERSION  "0.8"
+#define NML_VERSION  "0.9"
 
-#ifdef FF_WIN
+typedef unsigned char u_char;
 typedef unsigned short ushort;
 typedef unsigned int uint;
 typedef ffuint64 uint64;
-#endif
 
 enum NML_LOG {
 	NML_LOG_SYSFATAL,
@@ -67,7 +67,11 @@ enum NMLF_R {
 };
 
 /** A plugin implements this interface so it can act as a filter in data processing chain */
-struct nml_filter {
+typedef struct nml_component nml_component;
+typedef struct nml_http_sv_component nml_http_sv_component;
+typedef struct nml_http_cl_component nml_http_cl_component;
+typedef struct nml_dns_component nml_dns_component;
+struct nml_component {
 	/**
 	Return enum NMLF_R */
 	int (*open)(void *c);
@@ -83,6 +87,7 @@ struct nml_filter {
 
 struct ffringqueue;
 struct zzkevent;
+typedef struct zzkevent nml_kevent;
 typedef fftask_handler nml_func;
 typedef fftimerqueue_node nml_timer;
 typedef fftask nml_task;
@@ -201,6 +206,13 @@ struct nml_ssl_ctx {
 FF_EXTERN int nml_ssl_init(struct nml_ssl_ctx *ctx);
 FF_EXTERN void nml_ssl_uninit(struct nml_ssl_ctx *ctx);
 
+FF_EXTERN const nml_http_cl_component
+	nml_http_cl_ssl_handshake,
+	nml_http_cl_ssl_recv,
+	nml_http_cl_ssl_send,
+	nml_http_cl_ssl_req,
+	nml_http_cl_ssl_resp;
+
 
 /** HTTP Server: high-level module with a flexible setup:
  calls the user's filter chain for each inbound connection;
@@ -243,7 +255,7 @@ struct nml_http_server_conf {
 		uint	v6_only :1;
 	} server;
 
-	const struct nml_filter **filters;
+	const nml_http_sv_component **chain;
 
 	uint max_keep_alive_reqs;
 
@@ -296,6 +308,16 @@ FF_EXTERN int nml_http_server_run(nml_http_server *srv);
 /** Send stop-signal to the worker thread */
 FF_EXTERN void nml_http_server_stop(nml_http_server *srv);
 
+struct nml_http_sv_component {
+	int		(*open)(nml_http_sv_conn *c);
+	void	(*close)(nml_http_sv_conn *c);
+	int		(*process)(nml_http_sv_conn *c);
+	char	name[16];
+};
+
+FF_EXTERN const nml_http_sv_component
+	nml_http_sv_proxy;
+
 
 /** HTTP Server: file filter configuration */
 
@@ -324,6 +346,47 @@ FF_EXTERN int nml_http_virtspace_init(struct nml_http_server_conf *conf, const s
 FF_EXTERN void nml_http_virtspace_uninit(struct nml_http_server_conf *conf);
 
 
+/** Cache */
+
+typedef struct nml_cache_ctx nml_cache_ctx;
+
+/** Create context */
+FF_EXTERN nml_cache_ctx* nml_cache_create();
+
+FF_EXTERN void nml_cache_destroy(nml_cache_ctx *cx);
+
+typedef void (*nml_cache_destroy_t)(void *opaque, ffstr name, ffstr data);
+struct nml_cache_conf {
+	uint	log_level; // enum NML_LOG
+	void	*log_obj;
+	void	(*log)(void *log_obj, uint level, const char *ctx, const char *id, const char *format, ...);
+
+	uint	max_items;
+	uint	ttl_sec;
+
+	nml_cache_destroy_t destroy;
+	void *opaque;
+};
+
+/** Apply configuration */
+FF_EXTERN int nml_cache_conf(nml_cache_ctx *cx, struct nml_cache_conf *conf);
+
+/** Reserve data space inside a newly created cache entry.
+User must call nml_cache_add() or nml_cache_free(). */
+FF_EXTERN ffstr nml_cache_reserve(nml_cache_ctx *cx, size_t data_len);
+
+/** Free cache entry.
+nml_cache_conf.destroy() will be called. */
+FF_EXTERN void nml_cache_free(nml_cache_ctx *cx, ffstr data);
+
+/** Add data to cache. */
+FF_EXTERN int nml_cache_add(nml_cache_ctx *cx, ffstr name, ffstr data);
+
+/** Fetch and remove data from cache index.
+User must call nml_cache_free(). */
+FF_EXTERN ffstr nml_cache_fetch(nml_cache_ctx *cx, ffstr name);
+
+
 /** HTTP Client: sw-module that calls the user's filter chain for each outbound connection */
 
 struct nml_http_client_conf {
@@ -344,7 +407,7 @@ struct nml_http_client_conf {
 		host, // "hostname[:port]"
 		path,
 		headers;
-	const struct nml_filter **filters;
+	const nml_http_cl_component **chain;
 
 	ffstr proxy_host;
 	union {
@@ -357,6 +420,10 @@ struct nml_http_client_conf {
 		uint hdr_buf_size, max_buf, body_buf_size;
 		uint timeout_msec;
 	} receive;
+
+	struct {
+		nml_cache_ctx *cache;
+	} connect;
 
 	struct nml_ssl_ctx *ssl_ctx;
 
@@ -372,6 +439,25 @@ FF_EXTERN void nml_http_client_free(nml_http_client *c);
 FF_EXTERN int nml_http_client_conf(nml_http_client *c, struct nml_http_client_conf *conf);
 
 FF_EXTERN void nml_http_client_run(nml_http_client *c);
+
+struct nml_http_cl_component {
+	int		(*open)(nml_http_client *c);
+	void	(*close)(nml_http_client *c);
+	int		(*process)(nml_http_client *c);
+	char	name[16];
+};
+
+FF_EXTERN const nml_http_cl_component
+	nml_http_cl_resolve,
+	nml_http_cl_connection_cache,
+	nml_http_cl_connect,
+	nml_http_cl_io,
+	nml_http_cl_send,
+	nml_http_cl_recv,
+	nml_http_cl_response,
+	nml_http_cl_request,
+	nml_http_cl_transfer,
+	nml_http_cl_redir;
 
 
 /** DNS Server */
@@ -400,7 +486,7 @@ struct nml_dns_server_conf {
 	void (*wake)(nml_dns_sv_conn *c);
 
 	struct {
-		const struct nml_address *listen_addresses;
+		const struct nml_address *listen_addresses; // server UDP socket listen address (default: <any>:53)
 		uint	max_connections;
 		uint	events_num;
 		uint	timer_interval_msec;
@@ -411,7 +497,7 @@ struct nml_dns_server_conf {
 		uint	v6_only :1;
 	} server;
 
-	const struct nml_filter **filters;
+	const nml_dns_component **chain; // conveyor components for inbound DNS request processing (required)
 
 	struct {
 		ffvec	filenames; // char*[]
@@ -448,7 +534,9 @@ struct nml_dns_server_conf {
 		ffvec	servers; // struct upstream[]
 		uint	iserver;
 		uint64	out_reqs, in_msgs, in_data, out_data; // stats
-		ffmap	clients; // req.ID + req.Q -> nml_dns_sv_conn*
+
+		struct nml_ssl_ctx *doh_ssl_ctx; // DoH client SSL context (required)
+		nml_cache_ctx *doh_connection_cache; // DoH client connection cache
 	} upstreams;
 
 	uint debug_data_dump_len;
@@ -468,8 +556,15 @@ FF_EXTERN int nml_dns_server_run(nml_dns_server *srv);
 /** Send stop-signal to the worker thread */
 FF_EXTERN void nml_dns_server_stop(nml_dns_server *srv);
 
+struct nml_dns_component {
+	int		(*open)(nml_dns_sv_conn *c);
+	void	(*close)(nml_dns_sv_conn *c);
+	int		(*process)(nml_dns_sv_conn *c);
+	char	name[16];
+};
 
-/** DNS Server: hosts filter configuration */
+
+/** DNS Server: hosts */
 
 /** Initialize hosts file.
 conf.hosts.filenames is an array of file names containing host rules. Syntax:
@@ -484,11 +579,13 @@ FF_EXTERN void nml_dns_hosts_init(struct nml_dns_server_conf *conf);
 
 FF_EXTERN void nml_dns_hosts_uninit(struct nml_dns_server_conf *conf);
 
+FF_EXTERN int nml_dns_hosts_find(struct nml_dns_server_conf *conf, ffstr name, ffip6 *ip);
+
 /** Re-read source files if necessary */
 FF_EXTERN void nml_dns_hosts_refresh(struct nml_dns_server_conf *conf);
 
 
-/** DNS Server: upstreams filter configuration */
+/** DNS Server: upstreams */
 
 /** Initialize upstream servers.
 conf.upstreams.upstreams is an array of DNS server addresses */
@@ -497,7 +594,21 @@ FF_EXTERN int nml_dns_upstreams_init(struct nml_dns_server_conf *conf);
 FF_EXTERN void nml_dns_upstreams_uninit(struct nml_dns_server_conf *conf);
 
 
-/** DNS Server: file-cache filter configuration */
+/** DNS Server: UDP upsteam server */
+
+FF_EXTERN void* nml_dns_udp_create(struct nml_dns_server_conf *conf, const char *addr);
+
+FF_EXTERN void nml_dns_udp_free(void *p);
+
+
+/** DNS Server: DoH upsteam server */
+
+FF_EXTERN void* nml_dns_doh_create(struct nml_dns_server_conf *conf, const char *addr);
+
+FF_EXTERN void nml_dns_doh_free(void *p);
+
+
+/** DNS Server: file-cache */
 
 FF_EXTERN int nml_dns_filecache_init(struct nml_dns_server_conf *conf);
 

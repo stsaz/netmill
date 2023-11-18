@@ -91,12 +91,12 @@ static int lsock_prepare(nml_tcp_listener *l)
 	}
 #endif
 
-	if (0 != ffsock_bind(l->lsock, &addr)) {
+	if (ffsock_bind(l->lsock, &addr)) {
 		ls_syserrlog(l, "socket bind");
 		return -1;
 	}
 
-	if (0 != ffsock_listen(l->lsock, l->conf.backlog)) {
+	if (ffsock_listen(l->lsock, l->conf.backlog)) {
 		ls_syserrlog(l, "socket listen");
 		return -1;
 	}
@@ -116,11 +116,11 @@ int nml_tcp_listener_conf(nml_tcp_listener *l, struct nml_tcp_listener_conf *con
 
 	l->conf = *conf;
 
-	if (0 != lsock_prepare(l))
+	if (lsock_prepare(l))
 		return -1;
 
 	l->lsock_kev.rhandler = (zzkevent_func)ls_accept;
-	if (0 != l->conf.core.kq_attach(l->conf.boss, l->lsock, &l->lsock_kev, l)) {
+	if (l->conf.core.kq_attach(l->conf.boss, l->lsock, &l->lsock_kev, l)) {
 		return -1;
 	}
 
@@ -159,7 +159,7 @@ static int ls_accept1(nml_tcp_listener *l)
 static void ls_accept(nml_tcp_listener *l)
 {
 	for (;;) {
-		if (0 != ls_accept1(l))
+		if (ls_accept1(l))
 			break;
 	}
 }

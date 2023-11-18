@@ -11,18 +11,18 @@
 #include <http-server/access-log.h>
 #include <http-server/keep-alive.h>
 
-const struct nml_filter* hs_filters_proxy[] = {
-	&nml_filter_receive,
-	&nml_filter_request,
+const nml_component* hs_filters_proxy[] = {
+	&nml_http_sv_receive,
+	&nml_http_sv_request,
 	// &test_http_px_input,
-	&nml_filter_proxy,
+	&nml_http_sv_proxy,
 	// &test_http_px_output,
-	&nml_filter_error,
-	&nml_filter_transfer,
-	&nml_filter_response,
-	&nml_filter_send,
-	&nml_filter_accesslog,
-	&nml_filter_keepalive,
+	&nml_http_sv_error,
+	&nml_http_sv_transfer,
+	&nml_http_sv_response,
+	&nml_http_sv_send,
+	&nml_http_sv_accesslog,
+	&nml_http_sv_keepalive,
 	NULL
 };
 

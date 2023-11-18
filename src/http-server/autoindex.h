@@ -4,7 +4,7 @@
 #include <http-server/client.h>
 #include <ffsys/dirscan.h>
 
-static int nml_autoindex_open(nml_http_sv_conn *c)
+static int http_sv_autoindex_open(nml_http_sv_conn *c)
 {
 	if (c->resp_err
 		|| *ffstr_last(&c->req.unescaped_path) != '/')
@@ -13,7 +13,7 @@ static int nml_autoindex_open(nml_http_sv_conn *c)
 	return NMLF_OPEN;
 }
 
-static void nml_autoindex_close(nml_http_sv_conn *c)
+static void http_sv_autoindex_close(nml_http_sv_conn *c)
 {
 	ffvec_free(&c->autoindex.path);
 	ffvec_free(&c->autoindex.buf);
@@ -50,11 +50,11 @@ static void autoindex_content(nml_http_sv_conn *c, ffdirscan *ds, ffvec *buf)
 	ffvec_free(&namebuf);
 }
 
-static int nml_autoindex_process(nml_http_sv_conn *c)
+static int http_sv_autoindex_process(nml_http_sv_conn *c)
 {
 	ffdirscan ds = {};
 
-	if (0 == ffvec_addfmt(&c->autoindex.path, "%S%S%Z"
+	if (!ffvec_addfmt(&c->autoindex.path, "%S%S%Z"
 		, &c->conf->fs.www, &c->req.unescaped_path)) {
 		cl_errlog(c, "no memory");
 		cl_resp_status(c, HTTP_500_INTERNAL_SERVER_ERROR);
@@ -63,7 +63,7 @@ static int nml_autoindex_process(nml_http_sv_conn *c)
 	const char *path = c->autoindex.path.ptr;
 
 	cl_dbglog(c, "dirscan: %s", path);
-	if (0 != ffdirscan_open(&ds, path, 0)) {
+	if (ffdirscan_open(&ds, path, 0)) {
 		cl_syswarnlog(c, "ffdirscan_open: %s", path);
 		int rc = HTTP_403_FORBIDDEN;
 		if (fferr_notexist(fferr_last()))
@@ -84,7 +84,7 @@ end:
 	return NMLF_DONE;
 }
 
-const struct nml_filter nml_filter_autoindex = {
-	(void*)nml_autoindex_open, (void*)nml_autoindex_close, (void*)nml_autoindex_process,
+const nml_http_sv_component nml_http_sv_autoindex = {
+	http_sv_autoindex_open, http_sv_autoindex_close, http_sv_autoindex_process,
 	"autoindex"
 };

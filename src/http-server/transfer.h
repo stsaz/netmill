@@ -3,7 +3,7 @@
 
 #include <http-server/client.h>
 
-static int nml_trans_open(nml_http_sv_conn *c)
+static int http_sv_transfer_open(nml_http_sv_conn *c)
 {
 	if (c->resp.content_length != ~0ULL) {
 		c->transfer.cont_len = c->resp.content_length;
@@ -14,11 +14,11 @@ static int nml_trans_open(nml_http_sv_conn *c)
 	return NMLF_SKIP;
 }
 
-static void nml_trans_close(nml_http_sv_conn *c)
+static void http_sv_transfer_close(nml_http_sv_conn *c)
 {
 }
 
-static int nml_trans_process(nml_http_sv_conn *c)
+static int http_sv_transfer_process(nml_http_sv_conn *c)
 {
 	if (c->chain_going_back)
 		return NMLF_BACK;
@@ -31,7 +31,7 @@ static int nml_trans_process(nml_http_sv_conn *c)
 	return NMLF_FWD;
 }
 
-const struct nml_filter nml_filter_transfer = {
-	(void*)nml_trans_open, (void*)nml_trans_close, (void*)nml_trans_process,
+const nml_http_sv_component nml_http_sv_transfer = {
+	http_sv_transfer_open, http_sv_transfer_close, http_sv_transfer_process,
 	"transfer"
 };

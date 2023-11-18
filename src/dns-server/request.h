@@ -4,17 +4,17 @@
 #include <dns-server/client.h>
 #include <ffbase/mem-print.h>
 
-static int nml_dns_req_open(nml_dns_sv_conn *c)
+static int dns_req_open(nml_dns_sv_conn *c)
 {
 	return NMLF_OPEN;
 }
 
-static void nml_dns_req_close(nml_dns_sv_conn *c)
+static void dns_req_close(nml_dns_sv_conn *c)
 {
 	dns_msg_destroy(&c->req);
 }
 
-static int nml_dns_req_process(nml_dns_sv_conn *c)
+static int dns_req_process(nml_dns_sv_conn *c)
 {
 	uint port = 0;
 	ffslice ip = ffsockaddr_ip_port(&c->peer, &port);
@@ -64,7 +64,7 @@ static int nml_dns_req_process(nml_dns_sv_conn *c)
 	return NMLF_DONE;
 }
 
-const struct nml_filter nml_filter_dns_request = {
-	(void*)nml_dns_req_open, (void*)nml_dns_req_close, (void*)nml_dns_req_process,
+const nml_dns_component nml_dns_request = {
+	dns_req_open, dns_req_close, dns_req_process,
 	"req"
 };

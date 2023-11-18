@@ -16,7 +16,7 @@ static int filew_open(nml_http_client *c)
 		return NMLF_ERR;
 	}
 
-	if (0 != fffile_trunc(ux->fd, 0)) {
+	if (fffile_trunc(ux->fd, 0)) {
 		cl_syserrlog(c, "file truncate: %s", ux->conf.output);
 		return NMLF_ERR;
 	}
@@ -42,7 +42,7 @@ static int filew_process(nml_http_client *c)
 	return NMLF_BACK;
 }
 
-const struct nml_filter nml_filter_file_write = {
+const nml_http_cl_component nml_http_cl_file_write = {
 	(void*)filew_open, (void*)filew_close, (void*)filew_process,
 	"file-write"
 };

@@ -7,7 +7,7 @@
 #include <ffsys/file.h>
 #include <ffbase/vector.h>
 
-static void cl_filters_run(nml_http_sv_conn *c);
+static void cl_conveyor_run(nml_http_sv_conn *c);
 static void cl_destroy(nml_http_sv_conn *c);
 
 static void conveyor_log_init(struct nml_conveyor *v, const char *log_id, const struct nml_http_server_conf *conf)
@@ -40,12 +40,12 @@ void cl_start(ffsock csock, const ffsockaddr *peer, uint conn_id, struct nml_htt
 		ffmem_free(c);
 		return;
 	}
-	c->kev->rhandler = (void*)cl_filters_run;
-	c->kev->whandler = (void*)cl_filters_run;
-	c->kev->kcall.handler = (void*)cl_filters_run;
+	c->kev->rhandler = (void*)cl_conveyor_run;
+	c->kev->whandler = (void*)cl_conveyor_run;
+	c->kev->kcall.handler = (void*)cl_conveyor_run;
 	c->kev->kcall.param = c;
 
-	c->conf->cl_wake = cl_filters_run;
+	c->conf->cl_wake = cl_conveyor_run;
 	c->conf->cl_destroy = cl_destroy;
 
 	c->id[0] = '*';
@@ -68,13 +68,13 @@ void cl_start(ffsock csock, const ffsockaddr *peer, uint conn_id, struct nml_htt
 	}
 
 #ifdef FF_WIN
-	if (0 != cl_async(c))
+	if (cl_async(c))
 		return;
 #endif
 
-	conveyor_init(&c->conveyor, conf->filters);
+	conveyor_init(&c->conveyor, (const nml_component**)conf->chain);
 	conveyor_log_init(&c->conveyor, c->id, c->conf);
-	cl_filters_run(c);
+	cl_conveyor_run(c);
 }
 
 static void cl_destroy(nml_http_sv_conn *c)
@@ -97,11 +97,11 @@ static const char nmlf_r_str[][11] = {
 	"NMLF_SKIP",
 };
 
-/** Call the current filter */
-static int conveyor_filter_call(nml_http_sv_conn *c, uint i)
+/** Call the current component */
+static int conveyor_component_call(nml_http_sv_conn *c, uint i)
 {
 	struct nml_conveyor *v = &c->conveyor;
-	const struct nml_filter *f = v->filters[i];
+	const nml_http_sv_component *f = (nml_http_sv_component*)v->filters[i];
 	int r;
 
 	if (!v->rt[i].opened) {
@@ -120,7 +120,7 @@ static int conveyor_filter_call(nml_http_sv_conn *c, uint i)
 	return r;
 }
 
-static void cl_filters_run(nml_http_sv_conn *c)
+static void cl_conveyor_run(nml_http_sv_conn *c)
 {
 	struct nml_conveyor *v = &c->conveyor;
 
@@ -132,7 +132,7 @@ static void cl_filters_run(nml_http_sv_conn *c)
 			if (r == NMLF_FWD)
 				c->output = c->input;
 		} else {
-			r = conveyor_filter_call(c, i);
+			r = conveyor_component_call(c, i);
 		}
 
 		switch (r) {

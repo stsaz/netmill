@@ -10,9 +10,13 @@ default:
 
 build: openssl
 
-openssl: $(TGT_DIR)/libssl.$(SO)
+LIB_OPENSSL := $(TGT_DIR)/libssl.$(SO)
+ifeq "$(OS)" "windows"
+	LIB_OPENSSL := $(TGT_DIR)/libssl-3-x64.$(SO)
+endif
+openssl: $(LIB_OPENSSL)
 
-$(TGT_DIR)/libssl.$(SO):
+$(LIB_OPENSSL):
 	$(MAKE) -I.. -C openssl
 	cp openssl/*.$(SO)* $(TGT_DIR)
 

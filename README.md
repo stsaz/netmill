@@ -14,6 +14,7 @@ Current features:
 Contents:
 
 * [HTTP Server](#http-server)
+* [HTTP Client](#http-client)
 * [DNS Server](#dns-server)
 * [Build](#build)
 * [Install](#install)
@@ -23,26 +24,43 @@ Contents:
 
 ## HTTP Server
 
-HTTP/1.1 server features and limitations:
+Features:
 
 * Multi-threaded, uses all CPUs by default (Linux & Android only)
 * Completely asynchronous file I/O (offload syscalls to other threads)
 * Support active polling mode (experimental)
-* HTTP/1.1 only
 * Local files mode:
 	* Serves the file tree in `www/` directory by default
 	* Uses `index.html` as index file
 	* Generates index document (directory contents)
+* Proxy mode:
+	* Support tunnels (via CONNECT)
+* SSE-optimized HTTP parser
+* Configuration via command-line arguments; no configuration file required
+
+Limitations:
+
+* Local files mode:
 	* Doesn't use sendfile()
 	* No caching
 	* No compression
 	* No ETag, If-None-Match, Range
 * Proxy mode:
-	* Support tunnels (via CONNECT)
 	* No request body
 	* No outbound keep-alive
-* SSE-optimized HTTP parser
-* Configuration via command-line arguments; no configuration file required
+
+* HTTP/1.1 only (no HTTP/2)
+
+## HTTP Client
+
+Features:
+
+* Plain HTTP and HTTPS
+
+Limitations:
+
+* No request body
+* No server certificate verification
 
 
 ## DNS Server
@@ -51,13 +69,13 @@ netmill DNS server has ad-blocking and caching capabilities.
 It can be used as default DNS resolver on your system, blocking all attempts from any application to obtain an IP address of advertisment hosts.
 The internal cache saves network traffic, and the logs provide you with the information of what hosts were resolved and how much time it took.
 
-Features & limitations:
+Features:
 
 * Host list
 	* Only one A or AAAA record per host
 	* Block unwanted DNS names (e.g. DNS ads blocker)
 	* Configure how to block them: with 127.0.0.1, 0.0.0.0 or NXDOMAIN, etc.
-* DNS/UDP upstream servers
+* UDP and DNS-over-HTTPS upstream servers
 * Persistent file cache
 
 You can use many separate files as host lists, or all in one.  Syntax example:
@@ -104,7 +122,7 @@ Linux:
 
 ## Usage
 
-Several examples:
+### HTTP server
 
 ```sh
 # Run HTTP file-server on port `8080` with the current directory as root
@@ -112,7 +130,65 @@ netmill http  listen 8080  www .
 
 # Run HTTP proxy-server
 netmill http  listen 127.0.0.1:8080  proxy
+```
 
+### HTTP client
+
+```sh
+# Download a file over HTTP
+netmill url https://host.com/path/file
+```
+
+### DNS server
+
+* (Optional) Use netmill as default DNS server on Fedora:
+
+	```sh
+	# Disable preinstalled DNS server
+	sudo systemctl stop systemd-resolved
+	sudo systemctl disable systemd-resolved
+	sudo mv /etc/resolv.conf{,.backup}
+	# Now set 127.0.0.1 as DNS server in Network Manager, then restart network
+	```
+
+Example: run container with netmill with ad-blocking, caching DNS proxy securely connected to Google Public DNS:
+
+```sh
+cd ~/bin/netmill-0
+mkdir -p ./log ./dns-hosts ./dns-cache
+echo '8.8.8.8 dns.google' >./dns-hosts/hosts.txt
+# Download lists with the host names to block
+wget https://adaway.org/hosts.txt -O ./dns-hosts/adaway-hosts.txt
+wget https://adguardteam.github.io/AdGuardSDNSFilter/Filters/filter.txt -O ./dns-hosts/adguardteam-filter.txt
+
+cat <<EOF | sudo docker build -t netmill-dns -f - .
+FROM netmill:alpine
+ENTRYPOINT []
+CMD /netmill-0/netmill \
+ -log        /netmill-0/log/dns.log \
+ dns \
+ aaaa-block \
+ hosts       /netmill-0/dns-hosts/hosts.txt \
+ hosts       /netmill-0/dns-hosts/adaway-hosts.txt \
+ hosts       /netmill-0/dns-hosts/adguardteam-filter.txt \
+ monitor \
+ cache-dir   /netmill-0/dns-cache \
+ min-ttl     60 \
+ error-ttl   60 \
+ upstream    https://dns.google
+EOF
+
+sudo docker create \
+ --restart always \
+ -p 53:53/udp \
+ --name netmill_dns \
+ netmill-dns
+sudo docker start netmill_dns
+```
+
+More examples:
+
+```sh
 # Run DNS proxy-server with 1 hosts list, 1 upstream server and persistent cache
 sudo netmill dns \
  listen 127.0.0.1 \
@@ -126,9 +202,17 @@ sudo netmill service install \
 sudo systemctl start netmill
 sudo systemctl status netmill
 sudo systemctl enable netmill
+```
 
-# Download a file over HTTP
-netmill url https://host.com/path/file
+### Certificate generator
+
+```sh
+# Generate RSA key and X509 certificate PEM file
+netmill cert \
+ bits 2048 \
+ subject "/CN=hostname" \
+ until "2030-01-01 00:00:00" \
+ output cert.pem
 ```
 
 

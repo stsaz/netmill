@@ -4,7 +4,7 @@
 #pragma once
 
 struct nml_conveyor {
-	const struct nml_filter **filters;
+	const nml_component **filters;
 	uint empty_data_counter;
 	uint total, active, cur;
 	struct {
@@ -29,7 +29,7 @@ struct nml_conveyor {
 	} while (0)
 #endif
 
-static inline void conveyor_init(struct nml_conveyor *v, const struct nml_filter **filters)
+static inline void conveyor_init(struct nml_conveyor *v, const nml_component **filters)
 {
 	uint i;
 	for (i = 0;  filters[i] != NULL;  i++) {}
@@ -51,7 +51,7 @@ static inline void conveyor_close(struct nml_conveyor *v, void *object)
 {
 	for (uint i = 0;  v->filters[i] != NULL;  i++) {
 		if (v->rt[i].opened) {
-			const struct nml_filter *f = v->filters[i];
+			const nml_component *f = v->filters[i];
 			conveyor_extralog(v, "f#%u '%s': closing", i, f->name);
 			if (f->close != NULL)
 				f->close(object);

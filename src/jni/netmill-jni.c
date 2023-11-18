@@ -25,8 +25,8 @@ struct worker {
 };
 
 static JavaVM *jvm;
-extern const struct nml_filter* nml_http_server_filters[];
-extern const struct nml_filter* nml_http_server_filters_proxy[];
+extern const nml_component* nml_http_server_chain[];
+extern const nml_component* nml_http_server_chain_proxy[];
 
 JNIEXPORT jint JNI_OnLoad(JavaVM *_jvm, void *reserved)
 {
@@ -58,7 +58,7 @@ static int worker_start(struct worker *w, struct nml_jctx *c, struct nml_http_se
 {
 	w->th = FFTHREAD_NULL;
 	w->http_sv = nml_http_server_new();
-	if (!!nml_http_server_conf(w->http_sv, sc))
+	if (nml_http_server_conf(w->http_sv, sc))
 		return -1;
 	if (FFTHREAD_NULL == (w->th = ffthread_create(http_sv_thread, w, 0)))
 		return -1;
@@ -155,7 +155,7 @@ Java_com_github_stsaz_netmill_NetMill_httpStart(JNIEnv *env, jobject thiz, jobje
 		&& 0 != zzkcq_create(&c->kcq, io_workers, 200, /*polling*/ 0))
 		goto end;
 
-	if (0 != zzkcq_start(&c->kcq))
+	if (zzkcq_start(&c->kcq))
 		goto end;
 
 	struct nml_http_server_conf *sc = &c->sc;
@@ -186,9 +186,9 @@ Java_com_github_stsaz_netmill_NetMill_httpStart(JNIEnv *env, jobject thiz, jobje
 	ffvec_addsz(&content_types, "text/html	html\r\n");
 	nml_http_file_init(sc, *(ffstr*)&content_types);
 
-	sc->filters = nml_http_server_filters;
+	sc->filters = nml_http_server_chain;
 	if (proxy)
-		sc->filters = nml_http_server_filters_proxy;
+		sc->filters = nml_http_server_chain_proxy;
 
 	if (NULL == ffvec_zallocT(&c->workers, workers, struct worker))
 		goto end;
@@ -196,7 +196,7 @@ Java_com_github_stsaz_netmill_NetMill_httpStart(JNIEnv *env, jobject thiz, jobje
 
 	struct worker *w;
 	FFSLICE_WALK(&c->workers, w) {
-		if (!!worker_start(w, c, sc)) {
+		if (worker_start(w, c, sc)) {
 			char *e = ffsz_allocfmt("%E", fferr_last());
 			jni_obj_sz_set(env, jhso, jni_field(jc_hso, "error", JNI_TSTR), e);
 			ffmem_free(e);

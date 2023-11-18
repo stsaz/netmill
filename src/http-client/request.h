@@ -3,12 +3,12 @@
 
 #include <http-client/client.h>
 
-static int nml_hc_req_open(nml_http_client *c)
+static int http_cl_req_open(nml_http_client *c)
 {
 	return NMLF_OPEN;
 }
 
-static void nml_hc_req_close(nml_http_client *c)
+static void http_cl_req_close(nml_http_client *c)
 {
 	ffvec_free(&c->request.buf);
 }
@@ -49,7 +49,7 @@ static int headers_add(ffstr h, const char* const *hdrs_skip, char *dst, uint ca
 	return i;
 }
 
-static int nml_hc_req_process(nml_http_client *c)
+static int http_cl_req_process(nml_http_client *c)
 {
 	ffstr url = c->conf->path;
 	if (c->conf->proxy_host.len)
@@ -104,7 +104,7 @@ static int nml_hc_req_process(nml_http_client *c)
 	return NMLF_DONE;
 }
 
-const struct nml_filter nml_filter_http_cl_request = {
-	(void*)nml_hc_req_open, (void*)nml_hc_req_close, (void*)nml_hc_req_process,
+const nml_http_cl_component nml_http_cl_request = {
+	http_cl_req_open, http_cl_req_close, http_cl_req_process,
 	"req-prep"
 };

@@ -22,7 +22,13 @@ cd netmill
 * Cross-Build on Linux for Windows:
 
 	```sh
-	make -j8 OS=windows COMPILER=gcc CROSS_PREFIX=x86_64-w64-mingw32-
+	sh xbuild-win64.sh
+	```
+
+* Cross-Build on Linux for Alpine:
+
+	```sh
+	sh xbuild-alpine.sh
 	```
 
 * Cross-Build on Linux for Android:
@@ -35,14 +41,6 @@ cd netmill
 
 	```sh
 	gmake -j8
-	```
-
-* Build docker-container:
-
-	```sh
-	bash docker.sh create
-	bash docker.sh start &
-	bash docker.sh ..
 	```
 
 * Build inside a separate directory:

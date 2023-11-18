@@ -174,9 +174,9 @@ static inline ffbool ffip6_v4mapped(const ffip6 *ip)
 static inline void ffip6_v4mapped_set(ffip6 *ip6, const ffip4 *ip4)
 {
 	ffuint *i = (ffuint*)ip6->a;
+	i[3] = *(ffuint*)ip4;
 	i[0] = i[1] = 0;
 	i[2] = ffint_be_cpu32(0x0000ffff);
-	i[3] = *(ffuint*)ip4;
 }
 
 /** Return IPv4 address or NULL */

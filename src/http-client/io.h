@@ -4,7 +4,7 @@
 #include <http-client/client.h>
 #include <ffbase/mem-print.h>
 
-static int nml_io_open(nml_http_client *c)
+static int http_cl_io_open(nml_http_client *c)
 {
 	if (NULL == ffvec_alloc(&c->io.buf, 4*1024, 1))
 		return NMLF_ERR;
@@ -12,19 +12,19 @@ static int nml_io_open(nml_http_client *c)
 	return NMLF_OPEN;
 }
 
-static void nml_io_close(nml_http_client *c)
+static void http_cl_io_close(nml_http_client *c)
 {
 	ffvec_free(&c->io.buf);
 }
 
-static void nml_io_ready_w(nml_http_client *c)
+static void http_cl_io_ready_w(nml_http_client *c)
 {
 	c->w_pending = 0;
 	c->conveyor.cur = c->io.filter_index;
 	c->wake(c);
 }
 
-static int nml_io_send(nml_http_client *c)
+static int http_cl_io_send(nml_http_client *c)
 {
 	if (c->w_pending)
 		return NMLF_SKIP;
@@ -37,7 +37,7 @@ static int nml_io_send(nml_http_client *c)
 			if (fferr_last() == FFSOCK_EINPROGRESS) {
 				cl_dbglog(c, "send to server: in progress");
 				c->w_pending = 1;
-				cl_kev_w_async(c, nml_io_ready_w);
+				cl_kev_w_async(c, http_cl_io_ready_w);
 				return NMLF_ASYNC;
 			}
 			cl_syswarnlog(c, "socket write");
@@ -58,14 +58,14 @@ static int nml_io_send(nml_http_client *c)
 	return NMLF_BACK;
 }
 
-static void nml_io_ready_r(nml_http_client *c)
+static void http_cl_io_ready_r(nml_http_client *c)
 {
 	c->r_pending = 0;
 	c->conveyor.cur = c->io.filter_index;
 	c->wake(c);
 }
 
-static int nml_io_recv(nml_http_client *c)
+static int http_cl_io_recv(nml_http_client *c)
 {
 	if (c->recv_fin)
 		return NMLF_DONE;
@@ -79,7 +79,7 @@ static int nml_io_recv(nml_http_client *c)
 		if (fferr_last() == FFSOCK_EINPROGRESS) {
 			cl_dbglog(c, "receive from server: in progress");
 			c->r_pending = 1;
-			cl_kev_r_async(c, nml_io_ready_r);
+			cl_kev_r_async(c, http_cl_io_ready_r);
 			return NMLF_ASYNC;
 		}
 		cl_syswarnlog(c, "socket read");
@@ -108,13 +108,13 @@ static int nml_io_recv(nml_http_client *c)
 	return NMLF_FWD;
 }
 
-static int nml_io_process(nml_http_client *c)
+static int http_cl_io_process(nml_http_client *c)
 {
-	int rw = nml_io_send(c);
+	int rw = http_cl_io_send(c);
 	if (rw == NMLF_ERR)
 		return NMLF_ERR;
 
-	int rr = nml_io_recv(c);
+	int rr = http_cl_io_recv(c);
 	if (rr == NMLF_ERR)
 		return NMLF_ERR;
 
@@ -132,7 +132,7 @@ static int nml_io_process(nml_http_client *c)
 	return NMLF_ASYNC;
 }
 
-const struct nml_filter nml_filter_io = {
-	(void*)nml_io_open, (void*)nml_io_close, (void*)nml_io_process,
+const nml_http_cl_component nml_http_cl_io = {
+	http_cl_io_open, http_cl_io_close, http_cl_io_process,
 	"io"
 };

@@ -1,22 +1,23 @@
-# Architecture
+# netmill Architecture
 
 ## HTTP/1.1 server/client
 
-Server:
+The main point here is that HTTP server/client implementation is easy to use from other projects.
+It has a very flexible configuration: the parent code can add/substitute any component in the conveyor chain (as long as HTTP session logic is correct, of course).
+
+By default, the server can act as a file server or a proxy:
 
 ![](http-server.svg)
 
-Proxy:
+Proxy-Server component uses HTTP-Client chain internally for accessing the upstream server:
 
 ![](http-proxy.svg)
 
-Client:
+HTTP Client can operate in Plain or SSL modes:
 
 ![](http-client.svg)
 
-The main point is that HTTP server/client implementation is easy to use from other projects.  It has a very flexible configuration: the parent code can add/substitute any filter in chain (as long as HTTP session logic is correct, of course).
-
-## Full-duplex
+### Full-duplex I/O
 
 ```C
 	[WW]
@@ -59,7 +60,7 @@ The main point is that HTTP server/client implementation is easy to use from oth
 	@ <-------- * [=>RR]    * --------> @ [=>WW]
 ```
 
-## SSL
+### SSL
 
 ```C
 // Receiving:
@@ -100,6 +101,7 @@ The main point is that HTTP server/client implementation is easy to use from oth
 									>>
 										"..."
 ```
+
 
 ## DNS
 

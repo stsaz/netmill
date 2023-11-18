@@ -3,12 +3,12 @@
 
 #include <http-server/client.h>
 
-static int nml_ka_open(nml_http_sv_conn *c)
+static int http_sv_ka_open(nml_http_sv_conn *c)
 {
 	return NMLF_OPEN;
 }
 
-static void nml_ka_close(nml_http_sv_conn *c)
+static void http_sv_ka_close(nml_http_sv_conn *c)
 {
 	ffvec rb = c->recv.req; // preserve pipelined data
 	ffmem_zero(&c->start_time_msec, sizeof(*c) - FF_OFF(nml_http_sv_conn, start_time_msec));
@@ -16,7 +16,7 @@ static void nml_ka_close(nml_http_sv_conn *c)
 	c->recv.req = rb;
 }
 
-static int nml_ka_process(nml_http_sv_conn *c)
+static int http_sv_ka_process(nml_http_sv_conn *c)
 {
 	if (!c->resp_connection_keepalive)
 		return NMLF_FIN;
@@ -28,7 +28,7 @@ static int nml_ka_process(nml_http_sv_conn *c)
 	return NMLF_RESET;
 }
 
-const struct nml_filter nml_filter_keepalive = {
-	(void*)nml_ka_open, (void*)nml_ka_close, (void*)nml_ka_process,
+const nml_http_sv_component nml_http_sv_keepalive = {
+	http_sv_ka_open, http_sv_ka_close, http_sv_ka_process,
 	"keep-alive"
 };

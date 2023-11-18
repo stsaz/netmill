@@ -3,7 +3,7 @@
 
 #include <http-server/client.h>
 
-static int nml_resp_open(nml_http_sv_conn *c)
+static int http_sv_resp_open(nml_http_sv_conn *c)
 {
 	if (NULL == ffvec_alloc(&c->resp.buf, c->conf->response.buf_size, 1)) {
 		cl_syswarnlog(c, "no memory");
@@ -12,7 +12,7 @@ static int nml_resp_open(nml_http_sv_conn *c)
 	return NMLF_OPEN;
 }
 
-static void nml_resp_close(nml_http_sv_conn *c)
+static void http_sv_resp_close(nml_http_sv_conn *c)
 {
 	ffvec_free(&c->resp.buf);
 	ffstr_free(&c->resp.last_modified);
@@ -54,7 +54,7 @@ static int headers_add(ffstr h, const char* const *hdrs_skip, char *dst, uint ca
 	return i;
 }
 
-static int nml_resp_process(nml_http_sv_conn *c)
+static int http_sv_resp_process(nml_http_sv_conn *c)
 {
 	char *d = (char*)c->resp.buf.ptr, *end = (char*)c->resp.buf.ptr + c->resp.buf.cap - 2;
 
@@ -120,7 +120,7 @@ static int nml_resp_process(nml_http_sv_conn *c)
 	return NMLF_DONE;
 }
 
-const struct nml_filter nml_filter_response = {
-	(void*)nml_resp_open, (void*)nml_resp_close, (void*)nml_resp_process,
+const nml_http_sv_component nml_http_sv_response = {
+	http_sv_resp_open, http_sv_resp_close, http_sv_resp_process,
 	"resp-prep"
 };

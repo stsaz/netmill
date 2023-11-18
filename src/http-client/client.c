@@ -43,6 +43,7 @@ int nml_http_client_conf(nml_http_client *c, struct nml_http_client_conf *conf)
 	c->log_obj = conf->log_obj;
 	c->log = conf->log;
 	ffmem_copy(c->id, conf->id, sizeof(c->id));
+
 	c->wake = (void*)nml_http_client_run;
 
 	if (NULL == (c->kev = c->conf->core.kev_new(c->conf->boss)))
@@ -52,7 +53,7 @@ int nml_http_client_conf(nml_http_client *c, struct nml_http_client_conf *conf)
 	c->kev->kcall.handler = (void*)nml_http_client_run;
 	c->kev->kcall.param = c;
 
-	conveyor_init(&c->conveyor, conf->filters);
+	conveyor_init(&c->conveyor, (const nml_component**)conf->chain);
 
 #ifdef NML_ENABLE_LOG_EXTRA
 	if (c->log_level >= NML_LOG_DEBUG) {
@@ -78,11 +79,11 @@ static const char nmlf_r_str[][11] = {
 	"NMLF_SKIP",
 };
 
-/** Call the current filter */
-static int conveyor_filter_call(nml_http_client *c, uint i)
+/** Call the current component */
+static int conveyor_component_call(nml_http_client *c, uint i)
 {
 	struct nml_conveyor *v = &c->conveyor;
-	const struct nml_filter *f = v->filters[i];
+	const nml_http_cl_component *f = (nml_http_cl_component*)v->filters[i];
 	int r;
 
 	if (!v->rt[i].opened) {
@@ -118,7 +119,7 @@ void nml_http_client_run(nml_http_client *c)
 			if (r == NMLF_FWD)
 				c->output = c->input;
 		} else {
-			r = conveyor_filter_call(c, i);
+			r = conveyor_component_call(c, i);
 		}
 
 		switch (r) {

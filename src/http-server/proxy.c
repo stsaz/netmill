@@ -4,27 +4,27 @@
 #include <http-server/client.h>
 #include <http-server/proxy-data.h>
 
-extern const struct nml_filter *ocl_filters[];
-extern const struct nml_filter *ocl_connect_filters[];
+extern const nml_http_cl_component *http_cl_chain[];
+extern const nml_http_cl_component *http_cl_tunnel_chain[];
 
-static void nml_proxy_on_complete(struct nml_proxy *p)
+static void http_sv_proxy_on_complete(struct http_sv_proxy *p)
 {
 	p->signalled = 1;
 	p->svconf->core.task(p->svconf->boss, &p->task, 1);
 }
 
-void nml_proxy_wake(struct nml_proxy *p)
+void http_sv_proxy_wake(struct http_sv_proxy *p)
 {
 	nml_http_sv_conn *c = p->ic;
 	c->conveyor.cur = p->filter_index;
 	p->svconf->core.task(p->svconf->boss, &p->task, 1);
 }
 
-static int nml_proxy_open(nml_http_sv_conn *c)
+static int http_sv_proxy_open(nml_http_sv_conn *c)
 {
 	if (c->resp_err) return NMLF_SKIP;
 
-	struct nml_proxy *p = ffmem_new(struct nml_proxy);
+	struct http_sv_proxy *p = ffmem_new(struct http_sv_proxy);
 	c->proxy = p;
 	p->ic = c;
 	p->svconf = c->conf;
@@ -39,7 +39,7 @@ static int nml_proxy_open(nml_http_sv_conn *c)
 	ffmem_copy(cc->id, c->id, sizeof(cc->id));
 
 	nml_task_set(&p->task, (void*)c->conf->cl_wake, c);
-	cc->wake = (void*)nml_proxy_on_complete;
+	cc->wake = (void*)http_sv_proxy_on_complete;
 	cc->wake_param = p;
 
 	cc->core = c->conf->core;
@@ -51,7 +51,7 @@ static int nml_proxy_open(nml_http_sv_conn *c)
 	if (ffstr_eqz(&method, "CONNECT")) {
 		p->tunnel = 1;
 		c->resp_connection_keepalive = 0;
-		cc->filters = ocl_connect_filters;
+		cc->chain = http_cl_tunnel_chain;
 
 	} else {
 		cc->method = cl_req_hdr(c, c->req.method);
@@ -61,29 +61,29 @@ static int nml_proxy_open(nml_http_sv_conn *c)
 		ffstr_shift(&cc->headers, c->req.line.len + 1);
 		if (cc->headers.ptr[0] == '\n')
 			ffstr_shift(&cc->headers, 1);
-		cc->filters = ocl_filters;
+		cc->chain = http_cl_chain;
 	}
 
 	if (NULL == (p->cl = nml_http_client_new()))
 		return NMLF_ERR;
-	if (!!nml_http_client_conf(p->cl, cc))
+	if (nml_http_client_conf(p->cl, cc))
 		return NMLF_ERR;
 	p->filter_index = c->conveyor.cur;
 	return NMLF_OPEN;
 }
 
-static void nml_proxy_close(nml_http_sv_conn *c)
+static void http_sv_proxy_close(nml_http_sv_conn *c)
 {
-	struct nml_proxy *p = c->proxy;
+	struct http_sv_proxy *p = c->proxy;
 	c->proxy = NULL;
 	nml_http_client_free(p->cl);  p->cl = NULL;
 	c->conf->core.task(c->conf->boss, &p->task, 0);
 	ffmem_free(p);
 }
 
-static int nml_proxy_process(nml_http_sv_conn *c)
+static int http_sv_proxy_process(nml_http_sv_conn *c)
 {
-	struct nml_proxy *p = c->proxy;
+	struct http_sv_proxy *p = c->proxy;
 	int in = 0, out = 0;
 
 	cl_dbglog(c, "proxy filter state: %u|%u", p->req_state, p->resp_state);
@@ -154,7 +154,7 @@ static int nml_proxy_process(nml_http_sv_conn *c)
 	return NMLF_ASYNC;
 }
 
-const struct nml_filter nml_filter_proxy = {
-	(void*)nml_proxy_open, (void*)nml_proxy_close, (void*)nml_proxy_process,
+const nml_http_sv_component nml_http_sv_proxy = {
+	http_sv_proxy_open, http_sv_proxy_close, http_sv_proxy_process,
 	"proxy"
 };

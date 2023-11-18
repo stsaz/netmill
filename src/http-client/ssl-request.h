@@ -1,15 +1,15 @@
 /** netmill: http-client: SSL request encryption filter
 2023, Simon Zolin */
 
-static int nml_ssl_req_open(nml_http_client *c)
+static int http_cl_ssl_req_open(nml_http_client *c)
 {
 	return NMLF_OPEN;
 }
 
-static void nml_ssl_req_close(nml_http_client *c)
+static void http_cl_ssl_req_close(nml_http_client *c)
 {}
 
-static int nml_ssl_req_process(nml_http_client *c)
+static int http_cl_ssl_req_process(nml_http_client *c)
 {
 	if (c->ssl.data_sent) {
 		ffssl_conn_input(c->ssl.conn, c->ssl.data_sent);
@@ -51,7 +51,7 @@ static int nml_ssl_req_process(nml_http_client *c)
 	return NMLF_FWD;
 }
 
-const struct nml_filter nml_filter_ssl_req = {
-	(void*)nml_ssl_req_open, (void*)nml_ssl_req_close, (void*)nml_ssl_req_process,
+const nml_http_cl_component nml_http_cl_ssl_req = {
+	http_cl_ssl_req_open, http_cl_ssl_req_close, http_cl_ssl_req_process,
 	"ssl-req"
 };

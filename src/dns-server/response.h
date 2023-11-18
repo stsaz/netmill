@@ -3,19 +3,19 @@
 
 #include <dns-server/client.h>
 
-static int nml_dns_resp_open(nml_dns_sv_conn *c)
+static int dns_resp_open(nml_dns_sv_conn *c)
 {
 	if (c->respbuf.len)
 		return NMLF_SKIP;
 	return NMLF_OPEN;
 }
 
-static void nml_dns_resp_close(nml_dns_sv_conn *c)
+static void dns_resp_close(nml_dns_sv_conn *c)
 {
 	ffvec_free(&c->respbuf);
 }
 
-static int nml_dns_resp_process(nml_dns_sv_conn *c)
+static int dns_resp_process(nml_dns_sv_conn *c)
 {
 	ffvec resp = {};
 	if (!ffvec_alloc(&resp, FFDNS_MAXMSG, 1))
@@ -46,7 +46,7 @@ static int nml_dns_resp_process(nml_dns_sv_conn *c)
 	return NMLF_DONE;
 }
 
-const struct nml_filter nml_filter_dns_response = {
-	(void*)nml_dns_resp_open, (void*)nml_dns_resp_close, (void*)nml_dns_resp_process,
+const nml_dns_component nml_dns_response = {
+	dns_resp_open, dns_resp_close, dns_resp_process,
 	"resp"
 };

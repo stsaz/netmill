@@ -4,7 +4,7 @@
 #include <http-client/client.h>
 #include <ffbase/mem-print.h>
 
-static int nml_orecv_open(nml_http_client *c)
+static int http_cl_recv_open(nml_http_client *c)
 {
 	if (NULL == ffvec_alloc(&c->recv.buf, 4096, 1)) {
 		cl_warnlog(c, "no memory");
@@ -14,27 +14,27 @@ static int nml_orecv_open(nml_http_client *c)
 	return NMLF_OPEN;
 }
 
-static void nml_orecv_close(nml_http_client *c)
+static void http_cl_recv_close(nml_http_client *c)
 {
 	cl_timer_stop(c, &c->recv.timer);
 	ffvec_free(&c->recv.buf);
 	ffvec_free(&c->recv.body);
 }
 
-static void nml_orecv_read_expired(nml_http_client *c)
+static void http_cl_recv_expired(nml_http_client *c)
 {
 	cl_warnlog(c, "receive timeout");
 	c->timeout = 1;
 	c->wake(c);
 }
 
-static void nml_orecv_signal(nml_http_client *c)
+static void http_cl_recv_signal(nml_http_client *c)
 {
 	c->conveyor.cur = c->recv.filter_index;
 	c->wake(c);
 }
 
-static int nml_orecv_body(nml_http_client *c)
+static int http_cl_recv_body(nml_http_client *c)
 {
 	ffvec *buf = &c->recv.body;
 
@@ -47,8 +47,8 @@ static int nml_orecv_body(nml_http_client *c)
 	cl_timer_stop(c, &c->recv.timer);
 	if (r < 0) {
 		if (fferr_last() == FFSOCK_EINPROGRESS) {
-			cl_timer(c, &c->recv.timer, -(int)c->conf->receive.timeout_msec, nml_orecv_read_expired, c);
-			cl_kev_r_async(c, nml_orecv_signal);
+			cl_timer(c, &c->recv.timer, -(int)c->conf->receive.timeout_msec, http_cl_recv_expired, c);
+			cl_kev_r_async(c, http_cl_recv_signal);
 			cl_dbglog(c, "receive from server: in progress");
 			return NMLF_ASYNC;
 		}
@@ -76,14 +76,14 @@ static int nml_orecv_body(nml_http_client *c)
 	return NMLF_FWD;
 }
 
-static int nml_orecv_process(nml_http_client *c)
+static int http_cl_recv_process(nml_http_client *c)
 {
 	if (c->timeout) {
 		return NMLF_ERR;
 	}
 
 	if (c->response.status.len) {
-		return nml_orecv_body(c);
+		return http_cl_recv_body(c);
 	}
 
 	ffvec *buf = &c->recv.buf;
@@ -93,7 +93,7 @@ static int nml_orecv_process(nml_http_client *c)
 		return NMLF_ERR;
 	}
 
-	if (0 == ffvec_unused(buf)
+	if (!ffvec_unused(buf)
 		&& NULL == ffvec_grow(buf, c->conf->receive.hdr_buf_size, 1)) {
 		cl_warnlog(c, "no memory");
 		return NMLF_ERR;
@@ -103,8 +103,8 @@ static int nml_orecv_process(nml_http_client *c)
 	cl_timer_stop(c, &c->recv.timer);
 	if (r < 0) {
 		if (fferr_last() == FFSOCK_EINPROGRESS) {
-			cl_timer(c, &c->recv.timer, -(int)c->conf->receive.timeout_msec, nml_orecv_read_expired, c);
-			cl_kev_r_async(c, nml_orecv_signal);
+			cl_timer(c, &c->recv.timer, -(int)c->conf->receive.timeout_msec, http_cl_recv_expired, c);
+			cl_kev_r_async(c, http_cl_recv_signal);
 			cl_dbglog(c, "receive from server: in progress");
 			return NMLF_ASYNC;
 		}
@@ -132,7 +132,7 @@ static int nml_orecv_process(nml_http_client *c)
 	return NMLF_FWD;
 }
 
-const struct nml_filter nml_filter_recv = {
-	(void*)nml_orecv_open, (void*)nml_orecv_close, (void*)nml_orecv_process,
+const nml_http_cl_component nml_http_cl_recv = {
+	http_cl_recv_open, http_cl_recv_close, http_cl_recv_process,
 	"resp-recv"
 };

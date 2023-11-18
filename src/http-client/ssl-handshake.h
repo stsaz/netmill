@@ -1,8 +1,11 @@
 /** netmill: http-client: SSL handshake filter
 2023, Simon Zolin */
 
-static int nml_ssl_hs_open(nml_http_client *c)
+static int http_cl_ssl_hs_open(nml_http_client *c)
 {
+	if (c->ssl.conn)
+		return NMLF_SKIP; // this connection is taken from cache and the handshake has been completed already
+
 	struct ffssl_opt o = {};
 	o.tls_hostname = c->resolve.hostname;
 	int r;
@@ -14,7 +17,7 @@ static int nml_ssl_hs_open(nml_http_client *c)
 	return NMLF_OPEN;
 }
 
-static void nml_ssl_hs_close(nml_http_client *c)
+static void http_cl_ssl_hs_close(nml_http_client *c)
 {
 	ffssl_conn_free(c->ssl.conn);  c->ssl.conn = NULL;
 }
@@ -45,7 +48,7 @@ static void log_handshake_success(nml_http_client *c)
 		, valid_from, valid_to);
 }
 
-static int nml_ssl_hs_process(nml_http_client *c)
+static int http_cl_ssl_hs_process(nml_http_client *c)
 {
 	if (c->recv_fin)
 		return NMLF_ERR;
@@ -92,7 +95,7 @@ static int nml_ssl_hs_process(nml_http_client *c)
 	return NMLF_DONE;
 }
 
-const struct nml_filter nml_filter_ssl_handshake = {
-	(void*)nml_ssl_hs_open, (void*)nml_ssl_hs_close, (void*)nml_ssl_hs_process,
+const nml_http_cl_component nml_http_cl_ssl_handshake = {
+	http_cl_ssl_hs_open, http_cl_ssl_hs_close, http_cl_ssl_hs_process,
 	"ssl-handshake"
 };

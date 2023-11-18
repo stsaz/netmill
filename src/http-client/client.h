@@ -74,6 +74,7 @@ struct nml_http_client {
 	uint name_resolved :1;
 	uint timeout :1;
 	uint connection_close :1;
+	uint connection_from_cache :1;
 	uint recv_fin :1;
 	uint req_complete :1;
 	uint response_chunked :1;
@@ -93,6 +94,8 @@ struct nml_http_client {
 		ffsockaddr saddr;
 		nml_timer timer;
 		uint i_addr;
+		u_char cache_name[16+2];
+		ffstr cache_data;
 	} connect;
 
 	struct {

@@ -4,17 +4,17 @@
 #include <http-client/client.h>
 #include <ffbase/mem-print.h>
 
-static int nml_oresp_open(nml_http_client *c)
+static int http_cl_resp_open(nml_http_client *c)
 {
 	c->response.content_length = ~0ULL;
 	return NMLF_OPEN;
 }
 
-static void nml_oresp_close(nml_http_client *c)
+static void http_cl_resp_close(nml_http_client *c)
 {
 }
 
-static int nml_oresp_process(nml_http_client *c)
+static int http_cl_resp_process(nml_http_client *c)
 {
 	const char *base = c->input.ptr;
 	ffstr d = c->input, proto, msg;
@@ -99,7 +99,7 @@ static int nml_oresp_process(nml_http_client *c)
 	return NMLF_DONE;
 }
 
-const struct nml_filter nml_filter_resp = {
-	(void*)nml_oresp_open, (void*)nml_oresp_close, (void*)nml_oresp_process,
+const nml_http_cl_component nml_http_cl_response = {
+	http_cl_resp_open, http_cl_resp_close, http_cl_resp_process,
 	"resp-parse"
 };

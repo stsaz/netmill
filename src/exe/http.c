@@ -126,7 +126,7 @@ static void http_mods_init(struct nml_http_server_conf *sv)
 {
 	ffvec v = {};
 	char *fn = conf_abs_filename("content-types.conf");
-	if (0 == fffile_readwhole(fn, &v, 64*1024)) {
+	if (!fffile_readwhole(fn, &v, 64*1024)) {
 		nml_http_file_init(sv, *(ffstr*)&v);
 		ffvec_null(&v);
 	}
@@ -159,7 +159,7 @@ static void wrk_cpu_affinity(struct worker *w, uint icpu)
 	CPU_ZERO(&cpuset);
 	CPU_SET(icpu, &cpuset);
 	ffthread t = (w->thd != FFTHREAD_NULL) ? w->thd : pthread_self();
-	if (0 != pthread_setaffinity_np(t, sizeof(cpuset), &cpuset)) {
+	if (pthread_setaffinity_np(t, sizeof(cpuset), &cpuset)) {
 		syserrlog("set CPU affinity");
 		return;
 	}
@@ -183,8 +183,8 @@ static void cpu_affinity()
 	}
 }
 
-extern const struct nml_filter* nml_http_server_filters[];
-extern const struct nml_filter* nml_http_server_filters_proxy[];
+extern const nml_component* nml_http_server_chain[];
+extern const nml_component* nml_http_server_chain_proxy[];
 
 static int http_setup()
 {
@@ -209,9 +209,9 @@ static int http_setup()
 		sc->kcq_sq_sem = x->kcq.sem;
 	}
 
-	sc->filters = (void*)nml_http_server_filters;
+	sc->chain = (void*)nml_http_server_chain;
 	if (hc->proxy)
-		sc->filters = (void*)nml_http_server_filters_proxy;
+		sc->chain = (void*)nml_http_server_chain_proxy;
 
 	http_mods_init(sc);
 

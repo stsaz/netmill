@@ -4,13 +4,13 @@
 #include <http-client/client.h>
 #include <http-server/proxy-data.h>
 
-extern void nml_proxy_wake(struct nml_proxy *p);
+extern void http_sv_proxy_wake(struct http_sv_proxy *p);
 
 static int nml_http_proxy_input_open(nml_http_client *c) { return NMLF_OPEN; }
 
 static int nml_http_proxy_input_process(nml_http_client *c)
 {
-	struct nml_proxy *p = c->conf->opaque;
+	struct http_sv_proxy *p = c->conf->opaque;
 
 	switch (p->req_state) {
 	case PXREQ_1_READY:
@@ -22,7 +22,7 @@ static int nml_http_proxy_input_process(nml_http_client *c)
 	case PXREQ_2_LOCKED:
 		FF_ASSERT(c->chain_going_back);
 		p->req_state = PXREQ_3_MORE;
-		nml_proxy_wake(p);
+		http_sv_proxy_wake(p);
 		return NMLF_ASYNC;
 
 	case PXREQ_0:
@@ -36,7 +36,7 @@ static int nml_http_proxy_input_process(nml_http_client *c)
 	return NMLF_ERR;
 }
 
-const struct nml_filter nml_filter_http_cl_proxy_input = {
+const nml_http_cl_component nml_http_cl_proxy_input = {
 	(void*)nml_http_proxy_input_open, NULL, (void*)nml_http_proxy_input_process,
 	"proxy-input"
 };
@@ -44,7 +44,7 @@ const struct nml_filter nml_filter_http_cl_proxy_input = {
 
 static int nml_http_proxy_output_open(nml_http_client *c)
 {
-	struct nml_proxy *p = c->conf->opaque;
+	struct http_sv_proxy *p = c->conf->opaque;
 	p->code = c->response.code;
 	p->msg = range16_tostr(&c->response.msg, c->recv.buf.ptr);
 	p->content_length = c->response.content_length;
@@ -55,7 +55,7 @@ static int nml_http_proxy_output_open(nml_http_client *c)
 
 static int nml_http_proxy_output_process(nml_http_client *c)
 {
-	struct nml_proxy *p = c->conf->opaque;
+	struct http_sv_proxy *p = c->conf->opaque;
 
 	switch (p->resp_state) {
 	case PXRESP_0:
@@ -63,7 +63,7 @@ static int nml_http_proxy_output_process(nml_http_client *c)
 		p->resp_state = PXRESP_1_READY;
 		p->resp_complete = c->resp_complete;
 		p->output = c->input;
-		nml_proxy_wake(p);
+		http_sv_proxy_wake(p);
 		return NMLF_ASYNC;
 
 	case PXRESP_3_MORE:
@@ -82,41 +82,31 @@ static int nml_http_proxy_output_process(nml_http_client *c)
 	return NMLF_ERR;
 }
 
-const struct nml_filter nml_filter_http_cl_proxy_output = {
+const nml_http_cl_component nml_http_cl_proxy_output = {
 	(void*)nml_http_proxy_output_open, NULL, (void*)nml_http_proxy_output_process,
 	"proxy-output"
 };
 
 
-extern const struct nml_filter
-	nml_filter_resolve,
-	nml_filter_connect,
-	nml_filter_http_cl_request,
-	nml_filter_http_cl_send,
-	nml_filter_recv,
-	nml_filter_resp,
-	nml_filter_http_cl_transfer,
-	nml_filter_io;
-
-const struct nml_filter *ocl_filters[] = {
-	&nml_filter_http_cl_proxy_input,
-	&nml_filter_resolve,
-	&nml_filter_connect,
-	&nml_filter_http_cl_request,
-	&nml_filter_http_cl_send,
-	&nml_filter_recv,
-	&nml_filter_resp,
-	&nml_filter_http_cl_transfer,
-	&nml_filter_http_cl_proxy_output,
+const nml_http_cl_component* http_cl_chain[] = {
+	&nml_http_cl_proxy_input,
+	&nml_http_cl_resolve,
+	&nml_http_cl_connect,
+	&nml_http_cl_request,
+	&nml_http_cl_send,
+	&nml_http_cl_recv,
+	&nml_http_cl_response,
+	&nml_http_cl_transfer,
+	&nml_http_cl_proxy_output,
 	NULL
 };
 
 /** CONNECT request processing filters */
-const struct nml_filter *ocl_connect_filters[] = {
-	&nml_filter_http_cl_proxy_input,
-	&nml_filter_resolve,
-	&nml_filter_connect,
-	&nml_filter_io,
-	&nml_filter_http_cl_proxy_output,
+const nml_http_cl_component* http_cl_tunnel_chain[] = {
+	&nml_http_cl_proxy_input,
+	&nml_http_cl_resolve,
+	&nml_http_cl_connect,
+	&nml_http_cl_io,
+	&nml_http_cl_proxy_output,
 	NULL
 };

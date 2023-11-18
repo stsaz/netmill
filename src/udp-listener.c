@@ -92,7 +92,7 @@ static int lsock_prepare(nml_udp_listener *l)
 	}
 #endif
 
-	if (0 != ffsock_bind(l->sk, &addr)) {
+	if (ffsock_bind(l->sk, &addr)) {
 		udp_syserrlog(l, "socket bind");
 		return -1;
 	}
@@ -119,7 +119,7 @@ int nml_udp_listener_conf(nml_udp_listener *l, struct nml_udp_listener_conf *con
 		return -1;
 
 	l->sk_kev.rhandler = (zzkevent_func)udp_accept;
-	if (0 != l->conf.core.kq_attach(l->conf.boss, l->sk, &l->sk_kev, l))
+	if (l->conf.core.kq_attach(l->conf.boss, l->sk, &l->sk_kev, l))
 		return -1;
 
 	return 0;
@@ -157,7 +157,7 @@ static int udp_accept1(nml_udp_listener *l)
 static void udp_accept(nml_udp_listener *l)
 {
 	for (;;) {
-		if (0 != udp_accept1(l))
+		if (udp_accept1(l))
 			break;
 	}
 }

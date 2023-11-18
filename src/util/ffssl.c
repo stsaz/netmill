@@ -260,10 +260,10 @@ int ffssl_ctx_conf(SSL_CTX *ctx, const struct ffssl_ctx_conf *o)
 {
 	int r;
 
-	if (0 != (r = _ffssl_ctx_cert(ctx, o)))
+	if ((r = _ffssl_ctx_cert(ctx, o)))
 		return r;
 
-	if (0 != (r = _ffssl_ctx_pkey(ctx, o)))
+	if ((r = _ffssl_ctx_pkey(ctx, o)))
 		return r;
 
 	if (!SSL_CTX_check_private_key(ctx))
@@ -749,13 +749,16 @@ int ffssl_cert_create(X509 **px509, struct ffssl_cert_newinfo *info)
 	if (!X509_set_pubkey(x509, info->pkey))
 		goto end;
 
-	if (NULL == X509_time_adj_ex(X509_get_notBefore(x509), 0, 0, &info->from_time))
+	time_t t = info->from_time;
+	if (NULL == X509_time_adj_ex(X509_get_notBefore(x509), 0, 0, &t))
 		goto end;
-	if (NULL == X509_time_adj_ex(X509_get_notAfter(x509), 0, 0, &info->until_time))
+
+	t = info->until_time;
+	if (NULL == X509_time_adj_ex(X509_get_notAfter(x509), 0, 0, &t))
 		goto end;
 
 	X509_NAME *name = X509_get_subject_name(x509);
-	if (0 != _ffssl_x509_name(name, &info->subject))
+	if (_ffssl_x509_name(name, &info->subject))
 		goto end;
 
 	X509_NAME *iss_name = name;

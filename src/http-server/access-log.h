@@ -6,7 +6,7 @@
 #include <ffsys/std.h>
 
 /* CLIENT_IP REQ_TOTAL "METHOD PATH VER" RESP_TOTAL "VER CODE MSG" REALTIME */
-static int nml_accesslog_open(nml_http_sv_conn *c)
+static int http_sv_accesslog_open(nml_http_sv_conn *c)
 {
 	ffstr dts;
 	fftime end_time = c->conf->core.date(c->conf->boss, &dts);
@@ -32,12 +32,12 @@ static int nml_accesslog_open(nml_http_sv_conn *c)
 	return NMLF_OPEN;
 }
 
-static void nml_accesslog_close(nml_http_sv_conn *c)
+static void http_sv_accesslog_close(nml_http_sv_conn *c)
 {
 	ffstr_free(&c->acclog_buf);
 }
 
-static int nml_accesslog_process(nml_http_sv_conn *c)
+static int http_sv_accesslog_process(nml_http_sv_conn *c)
 {
 	if (cl_kcq_active(c))
 		cl_dbglog(c, "fffile_write: completed");
@@ -55,7 +55,7 @@ static int nml_accesslog_process(nml_http_sv_conn *c)
 	return NMLF_DONE;
 }
 
-const struct nml_filter nml_filter_accesslog = {
-	(void*)nml_accesslog_open, (void*)nml_accesslog_close, (void*)nml_accesslog_process,
+const nml_http_sv_component nml_http_sv_accesslog = {
+	http_sv_accesslog_open, http_sv_accesslog_close, http_sv_accesslog_process,
 	"access-log"
 };

@@ -18,7 +18,7 @@ static int test_hi_process(nml_http_client *c)
 	c->req_complete = 1;
 	return NMLF_DONE;
 }
-static const struct nml_filter test_http_input = {
+static const nml_component test_http_input = {
 	(void*)test_hi_open, NULL, (void*)test_hi_process,
 	"test-input"
 };
@@ -71,7 +71,7 @@ static int test_ho_process(nml_http_client *c)
 	zzkq_tq_post(&t->kq_tq, &t->tsk);
 	return NMLF_FIN;
 }
-static const struct nml_filter test_http_output = {
+static const nml_component test_http_output = {
 	(void*)test_ho_open, NULL, (void*)test_ho_process,
 	"test-output"
 };
@@ -87,24 +87,24 @@ static const struct nml_filter test_http_output = {
 #include <http-client/transfer.h>
 #include <http-client/redirect.h>
 
-static const struct nml_filter* hc_filters[] = {
+static const nml_component* hc_filters[] = {
 	&test_http_input,
-	&nml_filter_resolve,
-	&nml_filter_connect,
-	&nml_filter_http_cl_request,
-	&nml_filter_http_cl_send,
-	&nml_filter_recv,
-	&nml_filter_resp,
-	&nml_filter_http_cl_transfer,
+	&nml_http_cl_resolve,
+	&nml_http_cl_connect,
+	&nml_http_cl_request,
+	&nml_http_cl_send,
+	&nml_http_cl_recv,
+	&nml_http_cl_response,
+	&nml_http_cl_transfer,
 	&test_http_output,
-	&nml_filter_redir,
+	&nml_http_cl_redir,
 	NULL
 };
-static const struct nml_filter* hc_tun_filters[] = {
+static const nml_component* hc_tun_filters[] = {
 	&test_http_input,
-	&nml_filter_resolve,
-	&nml_filter_connect,
-	&nml_filter_io,
+	&nml_http_cl_resolve,
+	&nml_http_cl_connect,
+	&nml_http_cl_io,
 	&test_http_output,
 	NULL
 };

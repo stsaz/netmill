@@ -172,6 +172,7 @@ int main(int argc, char **argv)
 	exit_code = 0;
 
 end:
+	dbglog("exit code: %d", exit_code);
 	cleanup();
 	return exit_code;
 }

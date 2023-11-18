@@ -105,7 +105,7 @@ FF_EXTERN int ffssl_ctx_cache(ffssl_ctx *ctx, int size);
 FF_EXTERN void ffssl_ctx_sess_del(ffssl_ctx *ctx, ffssl_conn *c);
 
 
-enum ffssl_conn_create {
+enum FFSSL_CONN_CREATE {
 	/** Connection type: client (default) or server. */
 	FFSSL_CONNECT = 0,
 	FFSSL_ACCEPT = 1,
@@ -123,7 +123,7 @@ struct ffssl_opt {
 };
 
 /** Create a connection.
-flags: enum ffssl_conn_create
+flags: enum FFSSL_CONN_CREATE
 opt: additional options.
 Return enum FFSSL_E. */
 FF_EXTERN int ffssl_conn_create(ffssl_conn **c, ffssl_ctx *ctx, uint flags, struct ffssl_opt *opt);
@@ -228,8 +228,8 @@ FF_EXTERN void ffssl_cert_info(ffssl_cert *cert, struct ffssl_cert_info *info);
 struct ffssl_cert_newinfo {
 	ffstr subject; // "/K1=[V1]"...
 	int serial;
-	time_t from_time;
-	time_t until_time;
+	ffuint64 from_time; // UNIX timestamp
+	ffuint64 until_time;
 
 	ffssl_key *pkey;
 

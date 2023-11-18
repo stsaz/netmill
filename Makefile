@@ -25,7 +25,7 @@ CFLAGS += -MMD -MP
 CFLAGS += -I$(NETMILL)/src -I$(FFSYS) -I$(FFBASE)
 CFLAGS += -g
 ifeq "$(DEBUG)" "1"
-	CFLAGS += -DNML_ENABLE_LOG_EXTRA -DFF_DEBUG -O0
+	CFLAGS += -DNML_ENABLE_LOG_EXTRA -DFF_DEBUG -O0 -Werror
 else
 	CFLAGS += -O3 -fno-strict-aliasing
 endif
@@ -51,14 +51,9 @@ endif
 
 -include $(wildcard *.d)
 
-EXE_OBJ := \
-	exe-main.o \
-	exe-cert.o \
-	exe-dns.o \
-	exe-http.o \
-	exe-url.o
 EXE_OBJ += \
 	worker.o \
+	cache.o \
 	tcp-listener.o udp-listener.o \
 	nif.o
 
@@ -83,10 +78,7 @@ endif
 ffssl.o: $(NETMILL)/src/util/ffssl.c
 	$(C) $(CFLAGS_OPENSSL) $< -o $@
 
-exe-%.o: $(NETMILL)/src/exe/%.c
-	$(C) $(CFLAGS) $< -o $@
-$(EXE): $(EXE_OBJ)
-	$(LINK) $+ $(LINKFLAGS) $(LINK_PTHREAD) -o $@
+include $(NETMILL)/src/exe/Makefile
 
 strip-debug: $(EXE).debug
 %.debug: %

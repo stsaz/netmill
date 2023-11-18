@@ -3,29 +3,29 @@
 
 #include <ffbase/mem-print.h>
 
-static int nml_ssl_recv_open(nml_http_client *c)
+static int http_cl_ssl_recv_open(nml_http_client *c)
 {
 	c->recv.filter_index = c->conveyor.cur;
 	return NMLF_OPEN;
 }
 
-static void nml_ssl_recv_close(nml_http_client *c)
+static void http_cl_ssl_recv_close(nml_http_client *c)
 {}
 
-static void nml_ssl_recv_expired(nml_http_client *c)
+static void http_cl_ssl_recv_expired(nml_http_client *c)
 {
 	cl_warnlog(c, "receive timeout");
 	c->timeout = 1;
 	c->wake(c);
 }
 
-static void nml_ssl_recv_signal(nml_http_client *c)
+static void http_cl_ssl_recv_signal(nml_http_client *c)
 {
 	c->conveyor.cur = c->recv.filter_index;
 	c->wake(c);
 }
 
-static int nml_ssl_recv_process(nml_http_client *c)
+static int http_cl_ssl_recv_process(nml_http_client *c)
 {
 	if (c->timeout) {
 		return NMLF_ERR;
@@ -40,8 +40,8 @@ static int nml_ssl_recv_process(nml_http_client *c)
 	cl_timer_stop(c, &c->recv.timer);
 	if (r < 0) {
 		if (fferr_last() == FFSOCK_EINPROGRESS) {
-			cl_timer(c, &c->recv.timer, -(int)c->conf->receive.timeout_msec, nml_ssl_recv_expired, c);
-			cl_kev_r_async(c, nml_ssl_recv_signal);
+			cl_timer(c, &c->recv.timer, -(int)c->conf->receive.timeout_msec, http_cl_ssl_recv_expired, c);
+			cl_kev_r_async(c, http_cl_ssl_recv_signal);
 			cl_dbglog(c, "receive from server: in progress");
 			return NMLF_ASYNC;
 		}
@@ -70,7 +70,7 @@ static int nml_ssl_recv_process(nml_http_client *c)
 	return NMLF_FWD;
 }
 
-const struct nml_filter nml_filter_ssl_recv = {
-	(void*)nml_ssl_recv_open, (void*)nml_ssl_recv_close, (void*)nml_ssl_recv_process,
+const nml_http_cl_component nml_http_cl_ssl_recv = {
+	http_cl_ssl_recv_open, http_cl_ssl_recv_close, http_cl_ssl_recv_process,
 	"ssl-recv"
 };

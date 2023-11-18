@@ -16,7 +16,7 @@ enum {
 };
 
 /** Data shared between http-sv.proxy and http-cl.proxy filters */
-struct nml_proxy {
+struct http_sv_proxy {
 	nml_http_sv_conn *ic;
 	struct nml_http_server_conf *svconf;
 

@@ -123,86 +123,36 @@ struct ffarg_ctx url_ctx()
 	return ax;
 }
 
-static int cert_pem_create(const char *fn, uint pkey_bits, struct ffssl_cert_newinfo *ci)
-{
-	int r = 1;
-	ffvec buf = {};
-	ffstr kbuf = {}, cbuf = {};
-	ffssl_key *k = NULL;
-	ffssl_cert *c = NULL;
+extern int cert_pem_create(const char *fn, uint pkey_bits, struct ffssl_cert_newinfo *ci);
 
-	if (ffssl_key_create(&k, pkey_bits, FFSSL_PKEY_RSA))
-		goto end;
-	if (ffssl_key_print(k, &kbuf))
-		goto end;
-
-	fftime t;
-	fftime_now(&t);
-	ci->pkey = k;
-	if (ffssl_cert_create(&c, ci))
-		goto end;
-	if (ffssl_cert_print(c, &cbuf))
-		goto end;
-
-	ffvec_addstr(&buf, &cbuf);
-	ffvec_addstr(&buf, &kbuf);
-	if (fffile_writewhole(fn, buf.ptr, buf.len, 0)) {
-		syserrlog("file write: %s", fn);
-		goto end;
-	}
-
-	r = 0;
-
-end:
-	ffvec_free(&buf);
-	ffstr_free(&kbuf);
-	ffstr_free(&cbuf);
-	return r;
-}
-
-extern const struct nml_filter
-	nml_filter_resolve,
-	nml_filter_connect,
-	nml_filter_http_cl_request,
-	nml_filter_http_cl_send,
-	nml_filter_recv,
-	nml_filter_resp,
-	nml_filter_http_cl_transfer,
-	nml_filter_redir,
-	nml_filter_ssl_send,
-	nml_filter_ssl_recv,
-	nml_filter_ssl_handshake,
-	nml_filter_ssl_req,
-	nml_filter_ssl_resp;
-
-static const struct nml_filter *nml_http_cl_filters[] = {
-	&nml_filter_resolve,
-	&nml_filter_connect,
-	&nml_filter_http_cl_request,
-	&nml_filter_http_cl_send,
-	&nml_filter_recv,
-	&nml_filter_resp,
-	&nml_filter_http_cl_transfer,
-	&nml_filter_redir,
-	&nml_filter_file_write,
+static const nml_http_cl_component* nml_http_cl_chain[] = {
+	&nml_http_cl_resolve,
+	&nml_http_cl_connect,
+	&nml_http_cl_request,
+	&nml_http_cl_send,
+	&nml_http_cl_recv,
+	&nml_http_cl_response,
+	&nml_http_cl_transfer,
+	&nml_http_cl_redir,
+	&nml_http_cl_file_write,
 	NULL
 };
 
-static const struct nml_filter *nml_http_cl_ssl_filters[] = {
-	&nml_filter_resolve,
-	&nml_filter_connect,
-	&nml_filter_ssl_recv,
-	&nml_filter_ssl_handshake,
-	&nml_filter_ssl_send,
-	&nml_filter_http_cl_request,
-	&nml_filter_ssl_req,
-	&nml_filter_ssl_send,
-	&nml_filter_ssl_recv,
-	&nml_filter_ssl_resp,
-	&nml_filter_resp,
-	&nml_filter_http_cl_transfer,
-	&nml_filter_redir,
-	&nml_filter_file_write,
+static const nml_http_cl_component* nml_http_cl_ssl_chain[] = {
+	&nml_http_cl_resolve,
+	&nml_http_cl_connect,
+	&nml_http_cl_ssl_recv,
+	&nml_http_cl_ssl_handshake,
+	&nml_http_cl_ssl_send,
+	&nml_http_cl_request,
+	&nml_http_cl_ssl_req,
+	&nml_http_cl_ssl_send,
+	&nml_http_cl_ssl_recv,
+	&nml_http_cl_ssl_resp,
+	&nml_http_cl_response,
+	&nml_http_cl_transfer,
+	&nml_http_cl_redir,
+	&nml_http_cl_file_write,
 	NULL
 };
 
@@ -239,7 +189,7 @@ static int ssl_prepare()
 	if (nml_ssl_init(sc))
 		return -1;
 
-	ux->conf.hcc.filters = (void*)nml_http_cl_ssl_filters;
+	ux->conf.hcc.chain = (void*)nml_http_cl_ssl_chain;
 	return 0;
 }
 
@@ -257,7 +207,7 @@ static int url_setup()
 	ux->conf.hcc.log_obj = x;
 	ux->conf.hcc.log = exe_log;
 
-	ux->conf.hcc.filters = (void*)nml_http_cl_filters;
+	ux->conf.hcc.chain = (void*)nml_http_cl_chain;
 
 	if (ux->conf.https
 		&& ssl_prepare())

@@ -10,10 +10,10 @@ static int addr_split(nml_http_client *c, ffstr *name, ffip6 *ip, uint *port)
 		ffstr host = c->conf->proxy_host;
 		*port = c->conf->proxy_port;
 		ffip4 ip4;
-		if (0 == ffip4_parse(&ip4, host.ptr, host.len)) {
+		if (!ffip4_parse(&ip4, host.ptr, host.len)) {
 			ffip6_v4mapped_set(ip, &ip4);
 			return 'a';
-		} else if (0 == ffip6_parse(ip, host.ptr, host.len)) {
+		} else if (!ffip6_parse(ip, host.ptr, host.len)) {
 			return 'a';
 		}
 
@@ -43,7 +43,7 @@ static int addr_split(nml_http_client *c, ffstr *name, ffip6 *ip, uint *port)
 	return 'n';
 }
 
-static int nml_resolve_open(nml_http_client *c)
+static int http_cl_resolve_open(nml_http_client *c)
 {
 	ffstr name;
 	ffip6 ip;
@@ -68,13 +68,13 @@ static int nml_resolve_open(nml_http_client *c)
 	return NMLF_OPEN;
 }
 
-static void nml_resolve_close(nml_http_client *c)
+static void http_cl_resolve_close(nml_http_client *c)
 {
 	ffvec_free(&c->resolve.addrs);
 	ffmem_free(c->resolve.hostname);
 }
 
-static void nml_resolve_convert(nml_http_client *c, const ffaddrinfo *a)
+static void http_cl_resolve_convert(nml_http_client *c, const ffaddrinfo *a)
 {
 	for (const ffaddrinfo *i = a;  i != NULL;  i = i->ai_next) {
 
@@ -96,7 +96,7 @@ static void nml_resolve_convert(nml_http_client *c, const ffaddrinfo *a)
 	}
 }
 
-static int nml_resolve_process(nml_http_client *c)
+static int http_cl_resolve_process(nml_http_client *c)
 {
 	if (!c->name_resolved) {
 
@@ -116,7 +116,7 @@ static int nml_resolve_process(nml_http_client *c)
 
 		c->name_resolved = 1;
 
-		nml_resolve_convert(c, a);
+		http_cl_resolve_convert(c, a);
 		ffaddrinfo_free(a);
 	}
 
@@ -124,7 +124,7 @@ static int nml_resolve_process(nml_http_client *c)
 	return NMLF_DONE;
 }
 
-const struct nml_filter nml_filter_resolve = {
-	(void*)nml_resolve_open, (void*)nml_resolve_close, (void*)nml_resolve_process,
+const nml_http_cl_component nml_http_cl_resolve = {
+	http_cl_resolve_open, http_cl_resolve_close, http_cl_resolve_process,
 	"resolve"
 };

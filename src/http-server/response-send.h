@@ -3,30 +3,30 @@
 
 #include <http-server/client.h>
 
-static int nml_send_open(nml_http_sv_conn *c)
+static int http_sv_send_open(nml_http_sv_conn *c)
 {
 	c->send.filter_index = c->conveyor.cur;
 	return NMLF_OPEN;
 }
 
-static void nml_send_close(nml_http_sv_conn *c)
+static void http_sv_send_close(nml_http_sv_conn *c)
 {
 	cl_timer_stop(c, &c->send.timer);
 }
 
-static void nml_send_expired(nml_http_sv_conn *c)
+static void http_sv_send_expired(nml_http_sv_conn *c)
 {
 	cl_dbglog(c, "send timeout");
 	c->conf->cl_destroy(c);
 }
 
-static void nml_send_ready(nml_http_sv_conn *c)
+static void http_sv_send_ready(nml_http_sv_conn *c)
 {
 	c->conveyor.cur = c->send.filter_index;
 	c->conf->cl_wake(c);
 }
 
-static int nml_send_process(nml_http_sv_conn *c)
+static int http_sv_send_process(nml_http_sv_conn *c)
 {
 	if (!c->send_init) {
 		c->send_init = 1;
@@ -46,8 +46,8 @@ static int nml_send_process(nml_http_sv_conn *c)
 		int r = ffsock_sendv_async(c->sk, c->send.iov, c->send.iov_n, cl_kev_w(c));
 		if (r < 0) {
 			if (fferr_last() == FFSOCK_EINPROGRESS) {
-				cl_timer(c, &c->send.timer, -(int)c->conf->send.timeout_sec, nml_send_expired, c);
-				cl_async_w(c, nml_send_ready);
+				cl_timer(c, &c->send.timer, -(int)c->conf->send.timeout_sec, http_sv_send_expired, c);
+				cl_async_w(c, http_sv_send_ready);
 				return NMLF_ASYNC;
 			}
 			cl_syswarnlog(c, "socket writev");
@@ -74,7 +74,7 @@ static int nml_send_process(nml_http_sv_conn *c)
 	return NMLF_BACK;
 }
 
-const struct nml_filter nml_filter_send = {
-	(void*)nml_send_open, (void*)nml_send_close, (void*)nml_send_process,
+const nml_http_sv_component nml_http_sv_send = {
+	http_sv_send_open, http_sv_send_close, http_sv_send_process,
 	"resp-send"
 };
