@@ -43,7 +43,8 @@ CFLAGS += $(CFLAGS_USER)
 LINKFLAGS += $(LINKFLAGS_USER)
 
 
-default: $(EXE)
+default: $(EXE) \
+		nmlfw-xdp-ebpf.o
 ifneq "$(DEBUG)" "1"
 	$(SUBMAKE) strip-debug
 endif
@@ -60,6 +61,7 @@ EXE_OBJ += \
 include $(NETMILL)/src/dns-server/Makefile
 include $(NETMILL)/src/http-client/Makefile
 include $(NETMILL)/src/http-server/Makefile
+include $(NETMILL)/src/firewall/Makefile
 
 %.o: $(NETMILL)/src/%.c
 	$(C) $(CFLAGS) $< -o $@
@@ -93,6 +95,7 @@ clean:
 app:
 	mkdir -p $(APP_DIR)
 	cp -ru $(EXE) \
+		nmlfw-xdp-ebpf.o \
 		$(NETMILL)/content-types.conf \
 		$(NETMILL)/README.md \
 		$(NETMILL)/LICENSE \

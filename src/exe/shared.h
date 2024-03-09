@@ -88,5 +88,6 @@ static inline void help_info_write(const char *sz)
 
 extern struct ffarg_ctx cert_ctx();
 extern struct ffarg_ctx dns_ctx();
+extern struct ffarg_ctx firewall_ctx();
 extern struct ffarg_ctx http_ctx();
 extern struct ffarg_ctx url_ctx();

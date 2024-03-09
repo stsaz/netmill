@@ -36,26 +36,26 @@ static int cmd_debug(struct exe_conf *conf)
 
 static int usage()
 {
-	static const char help[] = "\
-Usage:\n\
+	help_info_write(
+"Usage:\n\
     netmill [GLOBAL-OPTIONS] COMMAND [OPTIONS]\n\
 \n\
 Global options:\n\
-  -help             Show help\n\
-  -Debug            Print debug logs\n\
-  -log FILE         Print logs to file\n\
+  `-help`             Show help\n\
+  `-Debug`            Print debug logs\n\
+  `-log` FILE         Print logs to file\n\
 \n\
 Command:\n\
-  cert          Generate certificate+key PEM file\n\
-  dns           Start DNS server\n\
-  http          Start HTTP server\n\
-  if            Show network interfaces\n\
-  service       Install system service\n\
-  url           Execute HTTP request\n\
+  `cert`          Generate certificate+key PEM file\n\
+  `dns`           Start DNS server\n\
+  `firewall`      Ingress firewall\n\
+  `http`          Start HTTP server\n\
+  `if`            Show network interfaces\n\
+  `service`       Install system service\n\
+  `url`           Execute HTTP request\n\
 \n\
-`netmill COMMAND help` will print details on each command.\n\
-";
-	ffstdout_write(help, FFS_LEN(help));
+\"netmill COMMAND help\" will print details on each command.\n\
+");
 	return R_DONE;
 }
 
@@ -67,6 +67,7 @@ static const struct ffarg nml_args[] = {
 	{ "-log",		's',	O(log_fn) },
 	{ "cert",		'{',	cert_ctx },
 	{ "dns",		'{',	dns_ctx },
+	{ "firewall",	'{',	firewall_ctx },
 	{ "http",		'{',	http_ctx },
 	{ "if",			'1',	nif_info },
 	{ "service",	'{',	svc_ctx },
