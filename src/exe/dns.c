@@ -85,45 +85,44 @@ static int dns_cmd_fin(struct dns_sv_conf *conf)
 
 static int dns_cmd_help()
 {
-	static const char help[] =
+	help_info_write(
 "Start DNS server\n\
-    netmill dns [OPTIONS]\n\
+    `netmill dns` [OPTIONS]\n\
 \n\
 Options:\n\
-  listen ADDR       Listening IP and UDP port (def: 53)\n\
+  `listen` ADDR       Listening IP and UDP port (def: 53)\n\
                       e.g. '53' or '127.0.0.1:53' or '[::1]:53'\n\
 \n\
-  aaaa-block        Respond to all AAAA requests with an empty set\n\
+  `aaaa-block`        Respond to all AAAA requests with an empty set\n\
 \n\
-  hosts FILE        Use 'hosts' file\n\
-  block-mode STR    How to respond to requests for blocked hosts (def: local_ip):\n\
+  `hosts` FILE        Use 'hosts' file\n\
+  `block-mode` STR    How to respond to requests for blocked hosts (def: local_ip):\n\
                       local_ip\n\
                       null_ip\n\
                       empty\n\
                       nxdomain\n\
                       refused\n\
                       drop\n\
-  block-ttl N       TTL for blocked responses (def: 60)\n\
-  rewrite-ttl N     TTL for rewritten responses (def: 60)\n\
-  monitor           Auto-refresh after hosts file has been updated\n\
+  `block-ttl` N       TTL for blocked responses (def: 60)\n\
+  `rewrite-ttl` N     TTL for rewritten responses (def: 60)\n\
+  `monitor`           Auto-refresh after hosts file has been updated\n\
 \n\
-  cache-dir DIR     Cache directory name\n\
-  min-ttl N         Minimum TTL value for a cached no-error response\n\
-  error-ttl N       Minimum TTL value for a cached error response\n\
+  `cache-dir` DIR     Cache directory name\n\
+  `min-ttl` N         Minimum TTL value for a cached no-error response\n\
+  `error-ttl` N       Minimum TTL value for a cached error response\n\
 \n\
-  upstream ADDR         Upstream server address:\n\
+  `upstream` ADDR         Upstream server address:\n\
                           \"https://HOST\"  DNS/HTTPS (HOST's IP address is resolved via 'hosts' files)\n\
                           \"IP\"            DNS/UDP\n\
-  read-timeout N        Response receive timeout (msec) (def: 300)\n\
-  resend-attempts N     Number of request re-send attempts after timeout (def: 2)\n\
+  `read-timeout` N        Response receive timeout (msec) (def: 300)\n\
+  `resend-attempts` N     Number of request re-send attempts after timeout (def: 2)\n\
 \n\
 DoH:\n\
-  cert FILE             Set certificate & private-key PEM file (def: client.pem)\n\
+  `cert` FILE             Set certificate & private-key PEM file (def: client.pem)\n\
 \n\
 Signal handlers:\n\
   SIGHUP    Refresh lists\n\
-";
-	ffstdout_write(help, FFS_LEN(help));
+");
 	return R_DONE;
 }
 

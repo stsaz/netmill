@@ -71,30 +71,29 @@ static int url_fin(struct url_conf *uc)
 
 static int url_help()
 {
-	static const char help[] =
+	help_info_write(
 "Execute HTTP request\n\
 \n\
-    netmill url [OPTIONS] URL\n\
+    `netmill url` [OPTIONS] URL\n\
 \n\
 URL format: [scheme://] host.com [:port] [/file]\n\
 \n\
 OPTIONS:\n\
 \n\
 SSL:\n\
-  -cert FILE        Set certificate & private-key PEM file\n\
+  `-cert` FILE        Set certificate & private-key PEM file\n\
 \n\
 HTTP:\n\
-  -method STRING    HTTP method (default: GET)\n\
-  -max_redirect     Max redirections (default: 10)\n\
-  -print_headers    Print HTTP response headers\n\
+  `-method` STRING    HTTP method (default: GET)\n\
+  `-max_redirect`     Max redirections (default: 10)\n\
+  `-print_headers`    Print HTTP response headers\n\
 \n\
 Output:\n\
-  -output FILE      Set output file name\n\
-  -force            Overwrite output file\n\
+  `-output` FILE      Set output file name\n\
+  `-force`            Overwrite output file\n\
 \n\
-  -help             Show help info\n\
-";
-	ffstdout_write(help, FFS_LEN(help));
+  `-help`             Show help info\n\
+");
 	return R_DONE;
 }
 

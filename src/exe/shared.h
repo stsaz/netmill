@@ -63,6 +63,29 @@ do { \
 		exe_log(x, NML_LOG_DEBUG, "netmill", NULL, __VA_ARGS__); \
 } while (0)
 
+
+static inline void help_info_write(const char *sz)
+{
+	ffstr s = FFSTR_INITZ(sz), l, k;
+	ffvec v = {};
+
+	const char *clr = FFSTD_CLR_B(FFSTD_PURPLE);
+	while (s.len) {
+		ffstr_splitby(&s, '`', &l, &s);
+		ffstr_splitby(&s, '`', &k, &s);
+		if (x->log.stdout_color) {
+			ffvec_addfmt(&v, "%S%s%S%s"
+				, &l, clr, &k, FFSTD_CLR_RESET);
+		} else {
+			ffvec_addfmt(&v, "%S%S"
+				, &l, &k);
+		}
+	}
+
+	ffstdout_write(v.ptr, v.len);
+	ffvec_free(&v);
+}
+
 extern struct ffarg_ctx cert_ctx();
 extern struct ffarg_ctx dns_ctx();
 extern struct ffarg_ctx http_ctx();

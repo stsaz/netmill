@@ -60,11 +60,10 @@ static const struct ffarg svc_install_args[] = {
 
 static int svc_help()
 {
-	static const char help[] = "\
-Install service (systemd)\n\
-    netmill service install /path/to/netmill COMMAND [OPTIONS]\n\
-";
-	ffstdout_write(help, FFS_LEN(help));
+	help_info_write(
+"Install service (systemd)\n\
+    `netmill service install` /path/to/netmill COMMAND [OPTIONS]\n\
+");
 	return R_DONE;
 }
 

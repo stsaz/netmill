@@ -111,26 +111,25 @@ static int cert_fin(void *obj)
 
 static int cert_help()
 {
-	static const char help[] =
+	help_info_write(
 "Generate certificate+key PEM file\n\
 \n\
-    netmill cert generate [OPTIONS]\n\
+    `netmill cert generate` [OPTIONS]\n\
 \n\
 OPTIONS:\n\
 \n\
 Private key:\n\
-  bits NUMBER       Key bits (default: 2048)\n\
+  `bits` NUMBER       Key bits (default: 2048)\n\
 \n\
 Certificate:\n\
-  from DATE         Valid from, e.g. \"2000-01-01 00:00:00\" (default: now)\n\
-  subject STR       Subject\n\
-  until DATE        Valid until (default: now + 1 day)\n\
-  serial NUMBER     Serial number (default: random)\n\
+  `from` DATE         Valid from, e.g. \"2000-01-01 00:00:00\" (default: now)\n\
+  `subject` STR       Subject\n\
+  `until` DATE        Valid until (default: now + 1 day)\n\
+  `serial` NUMBER     Serial number (default: random)\n\
 \n\
 Output:\n\
-  output FILE       Output file name (default: cert.pem)\n\
-";
-	ffstdout_write(help, FFS_LEN(help));
+  `output` FILE       Output file name (default: cert.pem)\n\
+");
 	return R_DONE;
 }
 

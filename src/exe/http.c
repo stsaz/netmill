@@ -70,22 +70,21 @@ static int http_cmd_fin(struct http_sv_conf *conf)
 
 static int http_cmd_help()
 {
-	static const char help[] =
+	help_info_write(
 "Start HTTP server\n\
-    netmill http [OPTIONS]\n\
+    `netmill http` [OPTIONS]\n\
 \n\
 Options:\n\
-  threads N         Worker threads (def: CPU#)\n\
-  cpumask N         CPU affinity bitmask, hex value (e.g. 15 for CPUs 0,2,4)\n\
-  kcall-threads N   kcall worker threads (def: CPU#)\n\
-  polling           Active polling mode\n\
+  `threads` N         Worker threads (def: CPU#)\n\
+  `cpumask` N         CPU affinity bitmask, hex value (e.g. 15 for CPUs 0,2,4)\n\
+  `kcall-threads` N   kcall worker threads (def: CPU#)\n\
+  `polling`           Active polling mode\n\
 \n\
-  listen ADDR       Listening IP and TCP port (def: 80)\n\
+  `listen` ADDR       Listening IP and TCP port (def: 80)\n\
                       e.g. 8080 or 127.0.0.1:8080 or [::1]:8080\n\
-  www DIR           Web directory (def: www)\n\
-  proxy             Act as a proxy (disable serving local files from 'www')\n\
-";
-	ffstdout_write(help, FFS_LEN(help));
+  `www` DIR           Web directory (def: www)\n\
+  `proxy`             Act as a proxy (disable serving local files from 'www')\n\
+");
 	return R_DONE;
 }
 

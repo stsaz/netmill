@@ -1,5 +1,4 @@
-/** netmill: public interface
-2023, Simon Zolin */
+/** netmill: public interface */
 
 #pragma once
 #include <ffsys/socket.h>
@@ -18,7 +17,7 @@
 typedef unsigned char u_char;
 typedef unsigned short ushort;
 typedef unsigned int uint;
-typedef ffuint64 uint64;
+typedef unsigned long long uint64;
 
 enum NML_LOG {
 	NML_LOG_SYSFATAL,
