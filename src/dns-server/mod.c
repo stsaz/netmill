@@ -1,12 +1,24 @@
-/** netmill: executor: start DNS server
+/** netmill: dns-server: start DNS server
 2023, Simon Zolin */
 
-#include <exe/shared.h>
-#include <util/kq.h>
+#include <netmill.h>
 #include <util/ipaddr.h>
 #include <util/ssl.h>
+#include <util/util.h>
 #include <ffsys/signal.h>
+#include <ffsys/globals.h>
 #include <ffbase/args.h>
+
+static const nml_exe *exe;
+
+#define syserrlog(...) \
+	exe->log(NULL, NML_LOG_SYSERR, "dns-server", NULL, __VA_ARGS__)
+
+#define errlog(...) \
+	exe->log(NULL, NML_LOG_ERR, "dns-server", NULL, __VA_ARGS__)
+
+#define infolog(...) \
+	exe->log(NULL, NML_LOG_INFO, "dns-server", NULL, __VA_ARGS__)
 
 struct dns_sv_conf {
 	struct nml_address listen_addr[2];
@@ -21,9 +33,14 @@ struct dns_sv_conf {
 	ffkqsig kqsig;
 	struct zzkevent kqsig_kev;
 #endif
+
+	const nml_cache_if *cif;
+	nml_dns_server *dns;
+	uint	conn_id;
 };
 
-static struct dns_sv_conf *dc;
+#define R_DONE  100
+#define R_BADVAL  101
 
 static int dns_cmd_listen(struct dns_sv_conf *conf, ffstr val)
 {
@@ -38,8 +55,6 @@ static int dns_cmd_hosts(struct dns_sv_conf *conf, char *fn)
 	*ffvec_pushT(&conf->sv.hosts.filenames, char*) = fn;
 	return 0;
 }
-
-static const job_if dns_serv;
 
 static int dns_cmd_upstream(struct dns_sv_conf *conf, const char *val)
 {
@@ -68,7 +83,7 @@ static int dns_cmd_block_mode(struct dns_sv_conf *conf, ffstr val)
 
 static int dns_cmd_cache_dir(struct dns_sv_conf *conf, const char *val)
 {
-	conf->cache_dir = conf_abs_filename(val);
+	conf->cache_dir = exe->path(val);
 	conf->sv.filecache.dir = conf->cache_dir;
 	return 0;
 }
@@ -79,13 +94,12 @@ static int dns_cmd_fin(struct dns_sv_conf *conf)
 	sc->hosts.block_aaaa = conf->block_aaaa;
 	sc->hosts.monitor_change = conf->monitor;
 	sc->hosts.file_refresh_period_sec = 1*60;
-	x->job = &dns_serv;
 	return 0;
 }
 
 static int dns_cmd_help()
 {
-	help_info_write(
+	exe->print(
 "Start DNS server\n\
     `netmill dns` [OPTIONS]\n\
 \n\
@@ -113,7 +127,7 @@ Options:\n\
 \n\
   `upstream` ADDR         Upstream server address:\n\
                           \"https://HOST\"  DNS/HTTPS (HOST's IP address is resolved via 'hosts' files)\n\
-                          \"IP\"            DNS/UDP\n\
+                          \"IP[:PORT]\"     DNS/UDP\n\
   `read-timeout` N        Response receive timeout (msec) (def: 300)\n\
   `resend-attempts` N     Number of request re-send attempts after timeout (def: 2)\n\
 \n\
@@ -157,10 +171,10 @@ static struct dns_sv_conf* dns_conf()
 	conf->listen_addr[0].port = 53;
 	nml_dns_server_conf(NULL, &conf->sv);
 
-	conf->sv.log_level = x->conf.log_level;
-	conf->sv.log_obj = x;
-	conf->sv.log = exe_log;
-	conf->sv.log_date_buffer = x->log.date;
+	conf->sv.log_level = exe->log_level;
+	conf->sv.log_obj = NULL;
+	conf->sv.log = exe->log;
+	conf->sv.log_date_buffer = exe->log_date_buffer;
 
 	conf->sv.hosts.block_mode = NML_DNS_BLOCK_LOCAL_IP;
 	conf->sv.hosts.rewrite_ttl = 60;
@@ -172,26 +186,37 @@ static struct dns_sv_conf* dns_conf()
 	return conf;
 }
 
-struct ffarg_ctx dns_ctx()
-{
-	dc = dns_conf();
-	struct ffarg_ctx ax = { dns_args, dc };
-	return ax;
-}
+static struct dns_sv_conf *dc;
 
-static void* dns_wrk_create()
+extern const nml_http_cl_component nml_http_cl_doh_resolve;
+extern const nml_http_cl_component nml_http_cl_doh_output;
+
+const nml_http_cl_component** doh_http_cl_chain()
 {
-	nml_dns_server *s;
-	if (!(s = nml_dns_server_new()))
-		return NULL;
-	if (nml_dns_server_conf(s, &dc->sv)) {
-		nml_dns_server_free(s);
-		return NULL;
+	static const char names[][25] = {
+		"http.cl_connection_cache",
+		"http.cl_connect",
+		"ssl.htcl_recv",
+		"ssl.htcl_handshake",
+		"ssl.htcl_send",
+		"http.cl_request",
+		"ssl.htcl_req",
+		"ssl.htcl_send",
+		"ssl.htcl_recv",
+		"ssl.htcl_resp",
+		"http.cl_response",
+		"http.cl_transfer",
+	};
+	const nml_http_cl_component **c = ffmem_calloc(FF_COUNT(names) + 3, sizeof(nml_http_cl_component)), **pc = c;
+	*pc++ = &nml_http_cl_doh_resolve;
+	uint i;
+	FF_FOR(names, i) {
+		*pc++ = exe->provide(names[i]);
 	}
-	return s;
+	*pc++ = &nml_http_cl_doh_output;
+	*pc = NULL;
+	return c;
 }
-
-extern int cert_pem_create(const char *fn, uint pkey_bits, struct ffssl_cert_newinfo *ci);
 
 static struct nml_ssl_ctx* dns_sv_ssl_prepare()
 {
@@ -199,8 +224,10 @@ static struct nml_ssl_ctx* dns_sv_ssl_prepare()
 	struct ffssl_ctx_conf *scc = ffmem_new(struct ffssl_ctx_conf);
 	sc->ctx_conf = scc;
 
+	const nml_ssl_if *sif = exe->provide("ssl.ssl");
+
 	if (!dc->cert_key_file) {
-		dc->cert_key_file = dc->cert_key_file_buf = ffsz_allocfmt("%S/client.pem", &x->conf.root_dir);
+		dc->cert_key_file = dc->cert_key_file_buf = exe->path("client.pem");
 		if (!fffile_exists(dc->cert_key_file)) {
 			fftime now;
 			fftime_now(&now);
@@ -209,7 +236,7 @@ static struct nml_ssl_ctx* dns_sv_ssl_prepare()
 				.from_time = now.sec,
 				.until_time = now.sec + 10*365*24*60*60,
 			};
-			cert_pem_create(dc->cert_key_file, 2048, &ci);
+			sif->cert_pem_create(dc->cert_key_file, 2048, &ci);
 			infolog("generated certificate file: %s", dc->cert_key_file);
 		}
 	}
@@ -218,37 +245,37 @@ static struct nml_ssl_ctx* dns_sv_ssl_prepare()
 	scc->pkey_file = dc->cert_key_file;
 	scc->allowed_protocols = FFSSL_PROTO_TLS13;
 
-	sc->log_level = x->conf.log_level;
-	sc->log_obj = x;
-	sc->log = exe_log;
+	sc->log_level = exe->log_level;
+	sc->log_obj = NULL;
+	sc->log = exe->log;
 
-	if (nml_ssl_init(sc))
+	if (sif->init(sc))
 		return NULL;
 
 	return sc;
 }
 
-extern void nml_http_cl_conn_cache_destroy(void *opaque, ffstr name, ffstr data);
-
 static void* dns_sv_doh_conn_cache()
 {
 	struct nml_cache_conf *cconf = ffmem_new(struct nml_cache_conf);
-	nml_cache_conf(NULL, cconf);
+	dc->cif->conf(NULL, cconf);
 
-	cconf->log_level = x->conf.log_level;
-	cconf->log = exe_log;
-	cconf->log_obj = x;
+	cconf->log_level = exe->log_level;
+	cconf->log = exe->log;
+	cconf->log_obj = NULL;
 
 	cconf->max_items = 60000;
-	cconf->destroy = nml_http_cl_conn_cache_destroy;
+	cconf->destroy = exe->provide("http.cl_conn_cache_destroy");
 	cconf->opaque = NULL;
 
-	nml_cache_ctx *cc = nml_cache_create();
-	if (!cc) return NULL;
-	nml_cache_conf(cc, cconf);
+	nml_cache_ctx *cc = dc->cif->create();
+	if (!cc)
+		return NULL;
+	dc->cif->conf(cc, cconf);
 	return cc;
 }
 
+extern const nml_dns_component* nml_dns_server_hosts_chain[];
 extern const nml_dns_component* nml_dns_server_chain[];
 
 static int dns_setup()
@@ -257,27 +284,32 @@ static int dns_setup()
 		return -1;
 
 	struct nml_dns_server_conf *sc = &dc->sv;
-	sc->server.conn_id_counter = &x->conn_id;
+	sc->server.conn_id_counter = &dc->conn_id;
 	sc->server.reuse_port = 1;
 
-	sc->chain = nml_dns_server_chain;
+	sc->chain = nml_dns_server_hosts_chain;
+	if (sc->upstreams.upstreams.len)
+		sc->chain = nml_dns_server_chain;
 
-	if (dc->have_doh
-		&& !(sc->upstreams.doh_ssl_ctx = dns_sv_ssl_prepare()))
-		return -1;
-
-	if (dc->have_doh
-		&& !(sc->upstreams.doh_connection_cache = dns_sv_doh_conn_cache()))
-		return -1;
-
-	if (!ffvec_zallocT(&x->workers, 1, struct worker))
-		return -1;
-	x->workers.len = 1;
-	struct worker *w;
-	FFSLICE_WALK(&x->workers, w) {
-		if (!(w->dns = dns_wrk_create()))
+	if (dc->have_doh) {
+		if (!(sc->upstreams.doh_ssl_ctx = dns_sv_ssl_prepare()))
 			return -1;
+
+		if (!(sc->upstreams.doh_connection_cache = dns_sv_doh_conn_cache()))
+			return -1;
+		sc->upstreams.cif = dc->cif;
+
+		sc->upstreams.doh_chain = doh_http_cl_chain();
+		sc->upstreams.hcif = exe->provide("http.client");
 	}
+
+	sc->server.lsif = exe->provide("core.udp_listener");
+	sc->server.wif = exe->provide("core.worker");
+
+	if (!(dc->dns = nml_dns_server_create()))
+		return -1;
+	if (nml_dns_server_conf(dc->dns, &dc->sv))
+		return -1;
 
 	nml_dns_hosts_init(sc);
 	nml_dns_filecache_init(sc);
@@ -285,48 +317,6 @@ static int dns_setup()
 	if (nml_dns_upstreams_init(sc))
 		return -1;
 	return 0;
-}
-
-/** Send stop signal to all workers */
-static void dns_stop()
-{
-	struct worker *w;
-	FFSLICE_WALK(&x->workers, w) {
-		if (w->dns)
-			nml_dns_server_stop(w->dns);
-	}
-}
-
-static void dns_destroy()
-{
-	struct worker *w;
-	FFSLICE_WALK(&x->workers, w) {
-		if (w->dns)  {
-			nml_dns_server_stop(w->dns);
-			if (w->thd != FFTHREAD_NULL) {
-				ffthread_join(w->thd, -1, NULL);
-			}
-		}
-	}
-
-	struct dns_sv_conf *conf = dc;
-	struct nml_dns_server_conf *dsc = &conf->sv;
-	nml_dns_upstreams_uninit(dsc);
-	nml_dns_hosts_uninit(dsc);
-	nml_cache_destroy(dsc->upstreams.doh_connection_cache);
-
-	FFSLICE_WALK(&x->workers, w) {
-#ifdef FF_UNIX
-		if (w->dns)
-			ffkqsig_detach(conf->kqsig, dsc->core.kq(dsc->boss));
-#endif
-		nml_dns_server_free(w->dns);
-	}
-
-	ffvec_free(&dsc->upstreams.upstreams);
-	ffvec_free(&dsc->hosts.filenames);
-	ffmem_free(conf->cache_dir);
-	ffmem_free(conf);
 }
 
 #ifdef FF_UNIX
@@ -354,19 +344,88 @@ static void sig_prepare(struct dns_sv_conf *conf)
 #endif
 }
 
-static int dns_run()
+static nml_op* dns_srv_create(char **argv)
 {
-	sig_prepare(dc);
+	dc = dns_conf();
 
-	struct worker *w = x->workers.ptr;
-	if (nml_dns_server_run(w->dns))
-		return -1;
-	return 0;
+	uint n = 0;
+	while (argv[n]) {
+		n++;
+	}
+
+	struct ffargs as = {};
+	int r = ffargs_process_argv(&as, dns_args, dc, FFARGS_O_PARTIAL | FFARGS_O_DUPLICATES, argv, n);
+	if (r) {
+		if (r == R_DONE)
+		{}
+		else if (r == R_BADVAL)
+			errlog("command line: near '%s': bad value\n", as.argv[as.argi-1]);
+		else
+			errlog("command line: %s\n", as.error);
+		return NULL;
+	}
+
+	dc->cif = exe->provide("core.cache");
+	return dc;
 }
 
-static const job_if dns_serv = {
-	.setup = dns_setup,
-	.run = dns_run,
-	.stop = dns_stop,
-	.destroy = dns_destroy,
+static void dns_srv_close(nml_op *op)
+{
+	nml_dns_server_free(dc->dns);
+	struct nml_dns_server_conf *dsc = &dc->sv;
+	nml_dns_upstreams_uninit(dsc);
+	nml_dns_hosts_uninit(dsc);
+
+	if (dc->cif)
+		dc->cif->destroy(dsc->upstreams.doh_connection_cache);
+
+#ifdef FF_UNIX
+	if (dc->dns)
+		ffkqsig_detach(dc->kqsig, dsc->core.kq(dsc->boss));
+#endif
+
+	ffvec_free(&dsc->upstreams.upstreams);
+	ffvec_free(&dsc->hosts.filenames);
+	ffmem_free(dc->cache_dir);
+	ffmem_free(dc);
+}
+
+static void dns_srv_run(nml_op *op)
+{
+	if (dns_setup())
+		return;
+	sig_prepare(dc);
+	if (nml_dns_server_run(dc->dns))
+		return;
+}
+
+static void dns_srv_signal(nml_op *op, uint signal)
+{
+	nml_dns_server_stop(dc->dns);
+}
+
+static const struct nml_operation_if nml_op_dns_srv = {
+	dns_srv_create,
+	dns_srv_close,
+	dns_srv_run,
+	dns_srv_signal,
 };
+
+
+static void dns_init(const nml_exe *x)
+{
+	exe = x;
+}
+
+static void dns_destroy()
+{
+}
+
+static const void* dns_provide(const char *name)
+{
+	if (ffsz_eq(name, "dns"))
+		return &nml_op_dns_srv;
+	return NULL;
+}
+
+NML_MOD_DEFINE(dns);

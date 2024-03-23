@@ -1,10 +1,18 @@
-/** netmill: executor: execute HTTP request
+/** netmill: http: execute HTTP request
 2023, Simon Zolin */
 
 #include <netmill.h>
-#include <exe/shared.h>
 #include <util/ssl.h>
+#include <util/util.h>
 #include <ffbase/args.h>
+
+extern const nml_exe *exe;
+
+#define errlog(...) \
+	exe->log(NULL, NML_LOG_ERR, "url", NULL, __VA_ARGS__)
+
+#define infolog(...) \
+	exe->log(NULL, NML_LOG_INFO, "url", NULL, __VA_ARGS__)
 
 struct url_conf {
 	struct nml_http_client_conf hcc;
@@ -19,6 +27,7 @@ struct url_conf {
 };
 
 struct url_ctx {
+	const nml_worker_if *wif;
 	struct url_conf conf;
 	struct nml_wrk *w;
 	nml_http_client *hc;
@@ -28,15 +37,16 @@ struct url_ctx {
 
 static struct url_ctx *ux;
 
-#include <exe/url-file-write.h>
+#include <http-client/url-file-write.h>
+
+#define R_DONE  100
+#define R_BADVAL  101
 
 static int url_input(struct url_conf *uc, ffstr val)
 {
 	ux->conf.input = ffsz_dupstr(&val);
 	return 0;
 }
-
-static const job_if url_exec;
 
 static int url_fin(struct url_conf *uc)
 {
@@ -64,14 +74,12 @@ static int url_fin(struct url_conf *uc)
 	if ((ux->conf.https = ffstr_eqz(&up.scheme, "https://"))
 		&& !up.port.len)
 		ux->conf.hcc.server_port = 443;
-
-	x->job = &url_exec;
 	return 0;
 }
 
 static int url_help()
 {
-	help_info_write(
+	exe->print(
 "Execute HTTP request\n\
 \n\
     `netmill url` [OPTIONS] URL\n\
@@ -112,17 +120,17 @@ static const struct ffarg url_args[] = {
 };
 #undef O
 
-struct ffarg_ctx url_ctx()
-{
-	ux = ffmem_new(struct url_ctx);
-	ux->fd = FFFILE_NULL;
-	ux->conf.max_redirect = 10;
-	nml_http_client_conf(NULL, &ux->conf.hcc);
-	struct ffarg_ctx ax = { url_args, &ux->conf };
-	return ax;
-}
-
-extern int cert_pem_create(const char *fn, uint pkey_bits, struct ffssl_cert_newinfo *ci);
+extern const nml_http_cl_component
+	nml_http_cl_resolve,
+	nml_http_cl_connection_cache,
+	nml_http_cl_connect,
+	nml_http_cl_io,
+	nml_http_cl_send,
+	nml_http_cl_recv,
+	nml_http_cl_response,
+	nml_http_cl_request,
+	nml_http_cl_transfer,
+	nml_http_cl_redir;
 
 static const nml_http_cl_component* nml_http_cl_chain[] = {
 	&nml_http_cl_resolve,
@@ -137,33 +145,52 @@ static const nml_http_cl_component* nml_http_cl_chain[] = {
 	NULL
 };
 
-static const nml_http_cl_component* nml_http_cl_ssl_chain[] = {
-	&nml_http_cl_resolve,
-	&nml_http_cl_connect,
-	&nml_http_cl_ssl_recv,
-	&nml_http_cl_ssl_handshake,
-	&nml_http_cl_ssl_send,
-	&nml_http_cl_request,
-	&nml_http_cl_ssl_req,
-	&nml_http_cl_ssl_send,
-	&nml_http_cl_ssl_recv,
-	&nml_http_cl_ssl_resp,
-	&nml_http_cl_response,
-	&nml_http_cl_transfer,
-	&nml_http_cl_redir,
-	&nml_http_cl_file_write,
-	NULL
+//@ cache
+static const nml_http_cl_component** nml_http_cl_ssl_chain(const nml_exe *exe)
+{
+	static const struct {
+		char name[20];
+		const void *iface;
+	} names[] = {
+		{"", &nml_http_cl_resolve},
+		{"", &nml_http_cl_connect},
+		{"ssl.htcl_recv", NULL},
+		{"ssl.htcl_handshake", NULL},
+		{"ssl.htcl_send", NULL},
+		{"", &nml_http_cl_request},
+		{"ssl.htcl_req", NULL},
+		{"ssl.htcl_send", NULL},
+		{"ssl.htcl_recv", NULL},
+		{"ssl.htcl_resp", NULL},
+		{"", &nml_http_cl_response},
+		{"", &nml_http_cl_transfer},
+		{"", &nml_http_cl_redir},
+		{"", &nml_http_cl_file_write},
+	};
+
+	const nml_http_cl_component **c = ffmem_calloc(FF_COUNT(names) + 1, sizeof(nml_http_cl_component)), **pc = c;
+	uint i;
+	FF_FOR(names, i) {
+		if (names[i].iface)
+			*pc++ = names[i].iface;
+		else
+			*pc++ = exe->provide(names[i].name);
+	}
+	*pc++ = NULL;
+	return c;
 };
 
 static int ssl_prepare()
 {
+	ux->conf.hcc.slif = exe->provide("ssl.ssl");
+
 	struct nml_ssl_ctx *sc = ffmem_new(struct nml_ssl_ctx);
 	ux->conf.hcc.ssl_ctx = sc;
 	struct ffssl_ctx_conf *scc = ffmem_new(struct ffssl_ctx_conf);
 	sc->ctx_conf = scc;
 
 	if (!ux->conf.cert_key_file) {
-		ux->conf.cert_key_file = ffsz_allocfmt("%S/client.pem", &x->conf.root_dir);
+		ux->conf.cert_key_file = exe->path("client.pem");
 		if (!fffile_exists(ux->conf.cert_key_file)) {
 			fftime now;
 			fftime_now(&now);
@@ -172,7 +199,7 @@ static int ssl_prepare()
 				.from_time = now.sec,
 				.until_time = now.sec + 10*365*24*60*60,
 			};
-			cert_pem_create(ux->conf.cert_key_file, 2048, &ci);
+			ux->conf.hcc.slif->cert_pem_create(ux->conf.cert_key_file, 2048, &ci);
 			infolog("generated certificate file: %s", ux->conf.cert_key_file);
 		}
 	}
@@ -181,20 +208,22 @@ static int ssl_prepare()
 	scc->pkey_file = ux->conf.cert_key_file;
 	// scc->allowed_protocols = FFSSL_PROTO_TLS13;
 
-	sc->log_level = x->conf.log_level;
-	sc->log_obj = x;
-	sc->log = exe_log;
+	sc->log_level = exe->log_level;
+	sc->log_obj = NULL;
+	sc->log = exe->log;
 
-	if (nml_ssl_init(sc))
+	if (ux->conf.hcc.slif->init(sc))
 		return -1;
 
-	ux->conf.hcc.chain = (void*)nml_http_cl_ssl_chain;
+	ux->conf.hcc.chain = nml_http_cl_ssl_chain(exe);
 	return 0;
 }
 
+static void url_signal(nml_op *op, uint signal);
+
 static void httpcl_complete(void *param)
 {
-	x->job->stop();
+	url_signal(param, 0);
 }
 
 static int url_setup()
@@ -202,39 +231,38 @@ static int url_setup()
 	if (ffsock_init(FFSOCK_INIT_SIGPIPE | FFSOCK_INIT_WSA | FFSOCK_INIT_WSAFUNCS))
 		return -1;
 
-	ux->conf.hcc.log_level = x->conf.log_level;
-	ux->conf.hcc.log_obj = x;
-	ux->conf.hcc.log = exe_log;
+	ux->conf.hcc.log_level = exe->log_level;
+	ux->conf.hcc.log_obj = NULL;
+	ux->conf.hcc.log = exe->log;
 
-	ux->conf.hcc.chain = (void*)nml_http_cl_chain;
+	ux->conf.hcc.chain = nml_http_cl_chain;
 
 	if (ux->conf.https
 		&& ssl_prepare())
 		return -1;
 
 	ux->conf.hcc.wake = httpcl_complete;
-	ux->conf.hcc.wake_param = NULL;
+	ux->conf.hcc.wake_param = ux;
 
 	ux->conf.hcc.max_redirect = ux->conf.max_redirect;
 
-	ux->w = nml_wrk_new();
+	ux->w = ux->wif->create(&ux->conf.hcc.core);
 	struct nml_wrk_conf wc = {
-		.log_level = x->conf.log_level,
-		.log = exe_log,
-		.log_obj = x,
+		.log_level = exe->log_level,
+		.log = exe->log,
+		.log_obj = NULL,
 		.log_ctx = "url",
-		.log_date_buffer = x->log.date,
+		.log_date_buffer = exe->log_date_buffer,
 
 		.events_num = 1,
 		.max_connections = 1,
 		.timer_interval_msec = 100,
 	};
-	if (nml_wrk_conf(ux->w, &wc))
+	if (ux->wif->conf(ux->w, &wc))
 		return -1;
-	ux->conf.hcc.core = nml_wrk_core_if;
 	ux->conf.hcc.boss = ux->w;
 
-	if (!(ux->hc = nml_http_client_new()))
+	if (!(ux->hc = nml_http_client_create()))
 		return -1;
 
 	if (nml_http_client_conf(ux->hc, &ux->conf.hcc))
@@ -243,37 +271,73 @@ static int url_setup()
 	return 0;
 }
 
-static void url_stop()
-{
-	nml_wrk_stop(ux->conf.hcc.boss);
-}
-
-static void url_destroy()
-{
-	if (!ux) return;
-
-	nml_http_client_free(ux->hc);
-
-	nml_wrk_free(ux->conf.hcc.boss);
-	nml_ssl_uninit(ux->conf.hcc.ssl_ctx);
-}
-
 static void url_run2(void *param)
 {
 	nml_http_client_run(ux->hc);
 }
 
-static int url_run()
+static int url_run3()
 {
 	nml_task_set(&ux->task, url_run2, NULL);
-	nml_wrk_core_if.task(ux->conf.hcc.boss, &ux->task, 1);
-	nml_wrk_run(ux->conf.hcc.boss);
+	ux->conf.hcc.core.task(ux->conf.hcc.boss, &ux->task, 1);
+	ux->wif->run(ux->conf.hcc.boss);
 	return 0;
 }
 
-static const job_if url_exec = {
-	.setup = url_setup,
-	.run = url_run,
-	.stop = url_stop,
-	.destroy = url_destroy,
+static nml_op* url_create(char **argv)
+{
+	ux = ffmem_new(struct url_ctx);
+	ux->fd = FFFILE_NULL;
+	ux->conf.max_redirect = 10;
+	ux->wif = exe->provide("core.worker");
+	nml_http_client_conf(NULL, &ux->conf.hcc);
+
+	uint n = 0;
+	while (argv[n]) {
+		n++;
+	}
+
+	struct ffargs as = {};
+	int r = ffargs_process_argv(&as, url_args, &ux->conf, FFARGS_O_PARTIAL | FFARGS_O_DUPLICATES, argv, n);
+	if (r) {
+		if (r == R_DONE)
+		{}
+		else if (r == R_BADVAL)
+			errlog("command line: near '%s': bad value\n", as.argv[as.argi-1]);
+		else
+			errlog("command line: %s\n", as.error);
+		return NULL;
+	}
+
+	return ux;
+}
+
+static void url_close(nml_op *op)
+{
+	struct url_ctx *u = op;
+	nml_http_client_free(u->hc);
+	if (u->wif)
+		u->wif->free(u->conf.hcc.boss);
+	if (u->conf.hcc.slif)
+		u->conf.hcc.slif->uninit(u->conf.hcc.ssl_ctx);
+	ffmem_free(u);
+}
+
+static void url_run(nml_op *op)
+{
+	url_setup();
+	url_run3();
+}
+
+static void url_signal(nml_op *op, uint signal)
+{
+	struct url_ctx *u = op;
+	u->wif->stop(u->conf.hcc.boss);
+}
+
+const struct nml_operation_if nml_op_url = {
+	url_create,
+	url_close,
+	url_run,
+	url_signal,
 };

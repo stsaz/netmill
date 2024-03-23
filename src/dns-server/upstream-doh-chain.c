@@ -58,22 +58,3 @@ const nml_http_cl_component nml_http_cl_doh_output = {
 	doh_output_open, NULL, doh_output_process,
 	"doh-output"
 };
-
-
-const nml_http_cl_component *http_cl_doh_chain[] = {
-	&nml_http_cl_doh_resolve,
-	&nml_http_cl_connection_cache,
-	&nml_http_cl_connect,
-	&nml_http_cl_ssl_recv,
-	&nml_http_cl_ssl_handshake,
-	&nml_http_cl_ssl_send,
-	&nml_http_cl_request,
-	&nml_http_cl_ssl_req,
-	&nml_http_cl_ssl_send,
-	&nml_http_cl_ssl_recv,
-	&nml_http_cl_ssl_resp,
-	&nml_http_cl_response,
-	&nml_http_cl_transfer,
-	&nml_http_cl_doh_output,
-	NULL
-};

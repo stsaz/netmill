@@ -625,7 +625,11 @@ static int dns_hosts_process(nml_dns_sv_conn *c)
 	}
 
 	int t = hosts_find(c->conf, &c->req.q, &c->ip);
-	if (t < 0 || t == T_PASS) {
+	if (t < 0) {
+		c->rcode = FFDNS_NXDOMAIN;
+		return NMLF_DONE;
+
+	} else if (t == T_PASS) {
 		return NMLF_DONE;
 
 	} else if (t == T_BLOCK) {

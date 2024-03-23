@@ -8,8 +8,6 @@
 #include <util/http1.h>
 #include <util/conveyor-static.h>
 
-#define NML_ASSERT(X)  assert(X)
-
 /** Client-context logger */
 
 #define cl_syserrlog(c, ...) \

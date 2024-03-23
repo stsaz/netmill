@@ -2,7 +2,7 @@
 2022, Simon Zolin */
 
 #include <netmill.h>
-#include <util/kcq.h>
+#include <ffsys/dylib.h>
 #include <util/log.h>
 
 typedef struct job_if job_if;
@@ -13,7 +13,6 @@ struct job_if {
 	void (*destroy)();
 };
 
-struct dns_sv_conf;
 struct svc_conf;
 struct exe_conf {
 	uint log_level;
@@ -26,68 +25,42 @@ struct exe_conf {
 #define R_DONE  100
 #define R_BADVAL  101
 
-struct worker {
-	nml_http_server *http;
-	nml_dns_server *dns;
-	ffthread thd;
+struct mod {
+	char *name;
+	ffdl dl;
+	const nml_module *mif;
 };
 
 struct exe {
 	struct exe_conf conf;
-	ffvec workers; // struct worker[]
-	uint conn_id;
 	struct zzlog log;
-	struct zzkcq kcq;
 
+	fflock mods_lock;
+	ffvec mods; // struct mod[]
+
+	uint argi;
+	const nml_operation_if *opif;
+	void *op;
 	const job_if *job;
 };
 
 extern struct exe *x;
 
 extern char* conf_abs_filename(const char *rel_fn);
-
+extern void help_info_write(const char *sz);
 extern void exe_log(void *opaque, uint level, const char *ctx, const char *id, const char *fmt, ...);
 
 #define syserrlog(...) \
-	exe_log(x, NML_LOG_SYSERR, "netmill", NULL, __VA_ARGS__)
+	exe_log(NULL, NML_LOG_SYSERR, "exe", NULL, __VA_ARGS__)
 
 #define errlog(...) \
-	exe_log(x, NML_LOG_ERR, "netmill", NULL, __VA_ARGS__)
+	exe_log(NULL, NML_LOG_ERR, "exe", NULL, __VA_ARGS__)
 
 #define infolog(...) \
-	exe_log(x, NML_LOG_INFO, "netmill", NULL, __VA_ARGS__)
+	exe_log(NULL, NML_LOG_INFO, "exe", NULL, __VA_ARGS__)
 
 #define dbglog(...) \
 do { \
 	if (x->conf.log_level >= NML_LOG_DEBUG) \
-		exe_log(x, NML_LOG_DEBUG, "netmill", NULL, __VA_ARGS__); \
+		exe_log(NULL, NML_LOG_DEBUG, "exe", NULL, __VA_ARGS__); \
 } while (0)
-
-
-static inline void help_info_write(const char *sz)
-{
-	ffstr s = FFSTR_INITZ(sz), l, k;
-	ffvec v = {};
-
-	const char *clr = FFSTD_CLR_B(FFSTD_PURPLE);
-	while (s.len) {
-		ffstr_splitby(&s, '`', &l, &s);
-		ffstr_splitby(&s, '`', &k, &s);
-		if (x->log.stdout_color) {
-			ffvec_addfmt(&v, "%S%s%S%s"
-				, &l, clr, &k, FFSTD_CLR_RESET);
-		} else {
-			ffvec_addfmt(&v, "%S%S"
-				, &l, &k);
-		}
-	}
-
-	ffstdout_write(v.ptr, v.len);
-	ffvec_free(&v);
-}
-
-extern struct ffarg_ctx cert_ctx();
-extern struct ffarg_ctx dns_ctx();
-extern struct ffarg_ctx firewall_ctx();
-extern struct ffarg_ctx http_ctx();
-extern struct ffarg_ctx url_ctx();

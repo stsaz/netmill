@@ -57,7 +57,7 @@ static int FFTHREAD_PROCCALL http_sv_thread(void *param)
 static int worker_start(struct worker *w, struct nml_jctx *c, struct nml_http_server_conf *sc)
 {
 	w->th = FFTHREAD_NULL;
-	w->http_sv = nml_http_server_new();
+	w->http_sv = nml_http_server_create();
 	if (nml_http_server_conf(w->http_sv, sc))
 		return -1;
 	if (FFTHREAD_NULL == (w->th = ffthread_create(http_sv_thread, w, 0)))
@@ -186,9 +186,9 @@ Java_com_github_stsaz_netmill_NetMill_httpStart(JNIEnv *env, jobject thiz, jobje
 	ffvec_addsz(&content_types, "text/html	html\r\n");
 	nml_http_file_init(sc, *(ffstr*)&content_types);
 
-	sc->filters = nml_http_server_chain;
+	sc->chain = (void*)nml_http_server_chain;
 	if (proxy)
-		sc->filters = nml_http_server_chain_proxy;
+		sc->chain = (void*)nml_http_server_chain_proxy;
 
 	if (NULL == ffvec_zallocT(&c->workers, workers, struct worker))
 		goto end;

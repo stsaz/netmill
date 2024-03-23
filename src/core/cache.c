@@ -4,20 +4,18 @@
 #include <netmill.h>
 #include <ffsys/perf.h>
 
-#define NML_ASSERT(X)  assert(X)
-
-#define CX_DEBUG(cx, ...) \
-do { \
-	if (cx->conf->log_level >= NML_LOG_DEBUG) \
-		cx->conf->log(cx->conf->log_obj, NML_LOG_DEBUG, "cache", NULL, __VA_ARGS__); \
-} while (0)
-
 struct nml_cache_ctx {
 	struct nml_cache_conf *conf;
 	fflock	lock;
 	ffmap	map;
 	fflist	age;
 };
+
+#define CX_DEBUG(cx, ...) \
+do { \
+	if (cx->conf->log_level >= NML_LOG_DEBUG) \
+		cx->conf->log(cx->conf->log_obj, NML_LOG_DEBUG, "cache", NULL, __VA_ARGS__); \
+} while (0)
 
 struct cache_entry {
 	ffchain_item age_node;
@@ -57,7 +55,8 @@ static int cache_entry_keyeq(void *opaque, const void *key, ffsize keylen, void 
 nml_cache_ctx* nml_cache_create()
 {
 	nml_cache_ctx *cx = ffmem_new(nml_cache_ctx);
-	if (!cx) return NULL;
+	if (!cx)
+		return NULL;
 	ffmap_init(&cx->map, cache_entry_keyeq);
 	fflist_init(&cx->age);
 	return cx;
@@ -79,16 +78,23 @@ void nml_cache_destroy(nml_cache_ctx *cx)
 	ffmem_free(cx);
 }
 
-static void cache_log_dummy(void *log_obj, uint level, const char *ctx, const char *id, const char *format, ...){}
+static void cache_log_dummy(void *log_obj, uint level, const char *ctx, const char *id, const char *format, ...)
+{}
+
+static void cache_conf_init(struct nml_cache_conf *conf)
+{
+	ffmem_zero_obj(conf);
+	conf->log_level = NML_LOG_INFO;
+	conf->log = cache_log_dummy;
+
+	conf->max_items = 1000000;
+	conf->ttl_sec = 10*60;
+}
 
 int nml_cache_conf(nml_cache_ctx *cx, struct nml_cache_conf *conf)
 {
 	if (!cx) {
-		ffmem_zero_obj(conf);
-		conf->max_items = 1000000;
-		conf->ttl_sec = 10*60;
-		conf->log_level = NML_LOG_INFO;
-		conf->log = cache_log_dummy;
+		cache_conf_init(conf);
 		return 0;
 	}
 
@@ -98,9 +104,9 @@ int nml_cache_conf(nml_cache_ctx *cx, struct nml_cache_conf *conf)
 
 ffstr nml_cache_reserve(nml_cache_ctx *cx, size_t data_len)
 {
-	FF_ASSERT(cx);
 	struct cache_entry *ce = ffmem_alloc(sizeof(struct cache_entry) + data_len);
-	if (!ce) return FFSTR_Z("");
+	if (!ce)
+		return FFSTR_Z("");
 	ce->data_cap = data_len;
 	ffstr data = FFSTR_INITN(ce->data, data_len);
 	return data;
@@ -108,14 +114,12 @@ ffstr nml_cache_reserve(nml_cache_ctx *cx, size_t data_len)
 
 void nml_cache_free(nml_cache_ctx *cx, ffstr data)
 {
-	FF_ASSERT(cx);
 	struct cache_entry *ce = FF_STRUCTPTR(struct cache_entry, data, data.ptr);
 	cache_del(cx, ce);
 }
 
 int nml_cache_add(nml_cache_ctx *cx, ffstr name, ffstr data)
 {
-	FF_ASSERT(cx);
 	int rc = -1;
 	struct cache_entry *ce = FF_STRUCTPTR(struct cache_entry, data, data.ptr);
 	NML_ASSERT(data.ptr == ce->data);
@@ -147,7 +151,6 @@ end:
 ffstr nml_cache_fetch(nml_cache_ctx *cx, ffstr name)
 {
 	int rc = -1;
-	FF_ASSERT(cx);
 
 	fflock_lock(&cx->lock);
 	struct cache_entry *ce = ffmap_find(&cx->map, name.ptr, name.len, NULL);
@@ -172,3 +175,13 @@ end:
 	ffstr data = FFSTR_INITN(ce->data, ce->data_len);
 	return data;
 }
+
+const struct nml_cache_if nml_cache_interface = {
+	nml_cache_create,
+	nml_cache_destroy,
+	nml_cache_conf,
+	nml_cache_reserve,
+	nml_cache_free,
+	nml_cache_add,
+	nml_cache_fetch,
+};

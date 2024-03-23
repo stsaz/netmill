@@ -26,7 +26,7 @@ static void conveyor_log_init(struct nml_conveyor *v, const char *log_id, const 
 void cl_start(ffsock csock, const ffsockaddr *peer, uint conn_id, struct nml_http_server_conf *conf)
 {
 	nml_http_sv_conn *c = ffmem_zalloc(sizeof(nml_http_sv_conn));
-	if (c == NULL)
+	if (!c)
 		return;
 	c->sk = csock;
 	c->conf = conf;
@@ -35,7 +35,7 @@ void cl_start(ffsock csock, const ffsockaddr *peer, uint conn_id, struct nml_htt
 	c->log = conf->log;
 	c->log_obj = conf->log_obj;
 
-	if (NULL == (c->kev = conf->core.kev_new(conf->boss))) {
+	if (!(c->kev = conf->core.kev_new(conf->boss))) {
 		ffsock_close(csock);
 		ffmem_free(c);
 		return;

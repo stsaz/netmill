@@ -7,8 +7,6 @@
 #include <util/dns.h>
 #include <util/conveyor-static.h>
 
-#define NML_ASSERT(X)  assert(X)
-
 #define cl_syswarnlog(c, ...) \
 	c->conf->log(c->conf->log_obj, NML_LOG_SYSWARN, "dns-sv", c->id, __VA_ARGS__)
 

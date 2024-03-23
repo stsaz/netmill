@@ -24,6 +24,28 @@ char* conf_abs_filename(const char *rel_fn)
 	return ffsz_allocfmt("%S%s", &x->conf.root_dir, rel_fn);
 }
 
+void help_info_write(const char *sz)
+{
+	ffstr s = FFSTR_INITZ(sz), l, k;
+	ffvec v = {};
+
+	const char *clr = FFSTD_CLR_B(FFSTD_PURPLE);
+	while (s.len) {
+		ffstr_splitby(&s, '`', &l, &s);
+		ffstr_splitby(&s, '`', &k, &s);
+		if (x->log.use_color) {
+			ffvec_addfmt(&v, "%S%s%S%s"
+				, &l, clr, &k, FFSTD_CLR_RESET);
+		} else {
+			ffvec_addfmt(&v, "%S%S"
+				, &l, &k);
+		}
+	}
+
+	ffstdout_write(v.ptr, v.len);
+	ffvec_free(&v);
+}
+
 #include <exe/log.h>
 #include <exe/service.h>
 #include <exe/if.h>
@@ -65,13 +87,8 @@ static const struct ffarg nml_args[] = {
 
 	{ "-help",		'1',	usage },
 	{ "-log",		's',	O(log_fn) },
-	{ "cert",		'{',	cert_ctx },
-	{ "dns",		'{',	dns_ctx },
-	{ "firewall",	'{',	firewall_ctx },
-	{ "http",		'{',	http_ctx },
 	{ "if",			'1',	nif_info },
 	{ "service",	'{',	svc_ctx },
-	{ "url",		'{',	url_ctx },
 	{}
 };
 #undef O
@@ -102,17 +119,23 @@ static const job_if* cmd(struct exe_conf *conf, int argc, char **argv)
 	}
 #endif
 
-	if (conf_root_dir(conf, argv[0])) return NULL;
+	if (conf_root_dir(conf, argv[0]))
+		return NULL;
 
 	struct ffargs as = {};
-	int r = ffargs_process_argv(&as, nml_args, conf, FFARGS_O_PARTIAL | FFARGS_O_DUPLICATES, argv+1, argc-1);
+	uint f = FFARGS_O_PARTIAL | FFARGS_O_DUPLICATES | FFARGS_O_SKIP_FIRST;
+	int r = ffargs_process_argv(&as, nml_args, conf, f, argv, argc);
 	if (r) {
 		if (r == R_DONE)
 		{}
 		else if (r == R_BADVAL)
 			ffstderr_fmt("command line: near '%s': bad value\n", as.argv[as.argi-1]);
-		else
+		else if (r == -FFARGS_E_ARG) {
+			// we met the first operation-specific argument
+			x->argi = as.argi - 1;
+		} else {
 			ffstderr_fmt("command line: %s\n", as.error);
+		}
 		return NULL;
 	}
 
@@ -125,7 +148,6 @@ static struct exe* init()
 	ffstdout_write(appname, FFS_LEN(appname));
 
 	struct exe *c = ffmem_new(struct exe);
-	c->conn_id = 1;
 	return c;
 }
 
@@ -134,20 +156,12 @@ static void conf_destroy(struct exe_conf *conf)
 	ffstr_free(&conf->root_dir);
 }
 
-static void cleanup()
-{
-	if (x->job)
-		x->job->destroy();
-	log_uninit();
-	zzkcq_destroy(&x->kcq);
-	ffvec_free(&x->workers);
-	conf_destroy(&x->conf);
-	ffmem_free(x);
-}
-
 static void onsig(struct ffsig_info *i)
 {
-	x->job->stop();
+	if (x->job)
+		x->job->stop();
+	else
+		x->opif->signal(x->op, 0);
 }
 
 static void sigs()
@@ -156,20 +170,192 @@ static void sigs()
 	ffsig_subscribe(onsig, sigs, FF_COUNT(sigs));
 }
 
+/** Find module */
+static struct mod* mod_find(ffstr name)
+{
+	struct mod *m;
+	FFSLICE_WALK(&x->mods, m) {
+		if (ffstr_eqz(&name, m->name))
+			return m;
+	}
+	return NULL;
+}
+
+static void mod_destroy(struct mod *m)
+{
+	if (!m) return;
+
+	if (m->mif && m->mif->close) {
+		dbglog("'%s': closing module", m->name);
+		m->mif->close();
+	}
+	if (m->dl != FFDL_NULL) {
+		dbglog("'%s': ffdl_close", m->name);
+		ffdl_close(m->dl);
+	}
+	ffmem_free(m->name);
+}
+
+/** Create module object */
+static struct mod* mod_create(ffstr name)
+{
+	struct mod *m = ffvec_zpushT(&x->mods, struct mod);
+	m->name = ffsz_dupstr(&name);
+	return m;
+}
+
+static struct nml_exe exe_if;
+
+static ffdl mod_load(struct mod *m, ffstr file)
+{
+	int done = 0;
+	ffdl dl = FFDL_NULL;
+
+	char *fn = ffsz_allocfmt("%Smod%c%S.%s"
+		, &x->conf.root_dir, FFPATH_SLASH, &file, FFDL_EXT);
+
+	if (FFDL_NULL == (dl = ffdl_open(fn, FFDL_SELFDIR))) {
+		errlog("%s: ffdl_open: %s", fn, ffdl_errstr());
+		goto end;
+	}
+
+	if (!(m->mif = ffdl_addr(dl, "netmill_module"))) {
+		errlog("%s: ffdl_addr '%s': %s"
+			, fn, "netmill_module", ffdl_errstr());
+		goto end;
+	}
+
+	dbglog("loaded module %S v%s"
+		, &file, m->mif->version);
+
+	if (m->mif->ver_core != NML_CORE_VER) {
+		errlog("module %S is incompatible with this netmill version", &file);
+		goto end;
+	}
+
+	m->mif->init(&exe_if);
+
+	done = 1;
+
+end:
+	ffmem_free(fn);
+	if (!done && dl != FFDL_NULL)
+		ffdl_close(dl);
+	return dl;
+}
+
+extern struct nml_module netmill_module;
+
+/** Load module, get interface */
+static const void* exe_provide(const char *name)
+{
+	const void *p = NULL;
+	int locked = 0;
+
+	ffstr s = FFSTR_INITZ(name), file, iface;
+	ffstr_splitby(&s, '.', &file, &iface);
+	if (!file.len)
+		goto end;
+
+	if (ffstr_eqz(&file, "core")) {
+		if (!(p = netmill_module.provide(iface.ptr))) {
+			errlog("no such interface: '%s'", name);
+			goto end;
+		}
+		return p;
+	}
+
+	fflock_lock(&x->mods_lock);
+	locked = 1;
+	struct mod *m = NULL;
+	if (!(m = mod_find(file)))
+		m = mod_create(file);
+
+	if (m->dl == FFDL_NULL) {
+		if (FFDL_NULL == (m->dl = mod_load(m, file)))
+			goto end;
+	}
+	fflock_unlock(&x->mods_lock);
+	locked = 0;
+
+	if (!iface.len)
+		goto end;
+
+	if (!(p = m->mif->provide(iface.ptr))) {
+		errlog("no such interface: '%s'", name);
+		goto end;
+	}
+
+end:
+	if (locked)
+		fflock_unlock(&x->mods_lock);
+
+	if (p)
+		dbglog("provide: %s", name);
+	return p;
+}
+
+static const nml_operation_if* op_provide(const char *op)
+{
+	if (ffsz_eq(op, "cert")) op = "ssl.cert";
+	if (ffsz_eq(op, "dns")) op = "dns.dns";
+	if (ffsz_eq(op, "firewall")) op = "firewall.firewall";
+	if (ffsz_eq(op, "http")) op = "http.http";
+	if (ffsz_eq(op, "ping")) op = "firewall.ping";
+	if (ffsz_eq(op, "url")) op = "http.url";
+	return exe_provide(op);
+}
+
+static struct nml_exe exe_if = {
+	.log = exe_log,
+	.path = conf_abs_filename,
+	.provide = exe_provide,
+	.print = help_info_write,
+};
+
+static void cleanup()
+{
+	if (x->job)
+		x->job->destroy();
+	if (x->op)
+		x->opif->close(x->op);
+
+	struct mod *m;
+	FFSLICE_WALK(&x->mods, m) {
+		mod_destroy(m);
+	}
+	ffvec_free(&x->mods);
+
+	log_uninit();
+	conf_destroy(&x->conf);
+	ffmem_free(x);
+}
+
 int main(int argc, char **argv)
 {
 	int exit_code = 1;
 	x = init();
 	log_init();
-	if (!(x->job = cmd(&x->conf, argc, argv)))
+
+	x->job = cmd(&x->conf, argc, argv);
+	if (x->job) {
+		if (log_open()) goto end;
+		if (x->job->setup()) goto end;
+		sigs();
+		if (x->job->run()) goto end;
+
+	} else if (x->argi) {
+		if (log_open()) goto end;
+		exe_if.log_level = x->conf.log_level;
+		exe_if.log_date_buffer = x->log.date;
+
+		if (!(x->opif = op_provide(argv[x->argi]))) goto end;
+		if (!(x->op = x->opif->create(&argv[x->argi + 1]))) goto end;
+		sigs();
+		x->opif->run(x->op);
+	} else {
 		goto end;
-	if (log_open())
-		goto end;
-	if (x->job->setup())
-		goto end;
-	sigs();
-	if (x->job->run())
-		goto end;
+	}
 	exit_code = 0;
 
 end:

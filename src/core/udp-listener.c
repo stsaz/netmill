@@ -14,29 +14,29 @@ struct nml_udp_listener {
 	ffsockaddr peer;
 };
 
-#define udp_syserrlog(l, ...) \
+#define l_syserrlog(l, ...) \
 	l->conf.log(l->conf.log_obj, NML_LOG_SYSERR, "udp-lis", NULL, __VA_ARGS__)
 
-#define udp_verblog(l, ...) \
+#define l_verblog(l, ...) \
 do { \
 	if (l->conf.log_level >= NML_LOG_VERBOSE) \
 		l->conf.log(l->conf.log_obj, NML_LOG_VERBOSE, "udp-lis", NULL, __VA_ARGS__); \
 } while (0)
 
-#define udp_dbglog(l, ...) \
+#define l_dbglog(l, ...) \
 do { \
 	if (l->conf.log_level >= NML_LOG_DEBUG) \
 		l->conf.log(l->conf.log_obj, NML_LOG_DEBUG, "udp-lis", NULL, __VA_ARGS__); \
 } while (0)
 
-nml_udp_listener* nml_udp_listener_new()
+static nml_udp_listener* nml_udp_listener_create()
 {
 	nml_udp_listener *l = ffmem_new(struct nml_udp_listener);
 	l->sk = FFSOCK_NULL;
 	return l;
 }
 
-void nml_udp_listener_free(nml_udp_listener *l)
+static void nml_udp_listener_destroy(nml_udp_listener *l)
 {
 	if (l == NULL) return;
 
@@ -61,14 +61,14 @@ static int lsock_prepare(nml_udp_listener *l)
 	const struct nml_address *a = &l->conf.addr;
 
 	const void *ip4 = ffip6_tov4((void*)a->ip);
-	uint sock_family = (ip4 != NULL) ? AF_INET : AF_INET6;
+	uint sock_family = (ip4) ? AF_INET : AF_INET6;
 	if (FFSOCK_NULL == (l->sk = ffsock_create_udp(sock_family, FFSOCK_NONBLOCK))) {
-		udp_syserrlog(l, "ffsock_create_udp");
+		l_syserrlog(l, "ffsock_create_udp");
 		return -1;
 	}
 
 	ffsockaddr addr = {};
-	if (ip4 != NULL) {
+	if (ip4) {
 		ffsockaddr_set_ipv4(&addr, ip4, a->port);
 	} else {
 		ffsockaddr_set_ipv6(&addr, a->ip, a->port);
@@ -76,8 +76,8 @@ static int lsock_prepare(nml_udp_listener *l)
 		// Allow clients to connect via IPv4
 		if (!l->conf.v6_only
 			&& ffip6_isany((void*)a->ip)
-			&& 0 != ffsock_setopt(l->sk, IPPROTO_IPV6, IPV6_V6ONLY, 0)) {
-			udp_syserrlog(l, "ffsock_setopt(IPV6_V6ONLY)");
+			&& ffsock_setopt(l->sk, IPPROTO_IPV6, IPV6_V6ONLY, 0)) {
+			l_syserrlog(l, "ffsock_setopt(IPV6_V6ONLY)");
 			return -1;
 		}
 	}
@@ -86,26 +86,26 @@ static int lsock_prepare(nml_udp_listener *l)
 	// Allow several listening sockets to bind to the same address/port.
 	// OS automatically distributes the load among the sockets.
 	if (l->conf.reuse_port
-		&& 0 != ffsock_setopt(l->sk, SOL_SOCKET, SO_REUSEPORT, 1)) {
-		udp_syserrlog(l, "ffsock_setopt(SO_REUSEPORT)");
+		&& ffsock_setopt(l->sk, SOL_SOCKET, SO_REUSEPORT, 1)) {
+		l_syserrlog(l, "ffsock_setopt(SO_REUSEPORT)");
 		return -1;
 	}
 #endif
 
 	if (ffsock_bind(l->sk, &addr)) {
-		udp_syserrlog(l, "socket bind");
+		l_syserrlog(l, "socket bind");
 		return -1;
 	}
 
-	udp_verblog(l, "listening on %u", a->port);
+	l_verblog(l, "listening on %u", a->port);
 	return 0;
 }
 
 static void udp_accept(nml_udp_listener *l);
 
-int nml_udp_listener_conf(nml_udp_listener *l, struct nml_udp_listener_conf *conf)
+static int nml_udp_listener_conf(nml_udp_listener *l, struct nml_udp_listener_conf *conf)
 {
-	if (l == NULL) {
+	if (!l) {
 		udp_conf_init(conf);
 		return 0;
 	}
@@ -134,13 +134,13 @@ static int udp_accept1(nml_udp_listener *l)
 		// handle "port unreachable" error from the previous sendto()
 		if (fferr_last() == WSAECONNRESET
 			|| fferr_last() == ERROR_PORT_UNREACHABLE) {
-			udp_dbglog(l, "ffsock_recvfrom: %E", fferr_last());
+			l_dbglog(l, "ffsock_recvfrom: %E", fferr_last());
 			return 0;
 		}
 #endif
 
 		if (fferr_last() != FFSOCK_EINPROGRESS)
-			udp_syserrlog(l, "ffsock_recvfrom");
+			l_syserrlog(l, "ffsock_recvfrom");
 		return -1;
 	}
 
@@ -162,8 +162,15 @@ static void udp_accept(nml_udp_listener *l)
 	}
 }
 
-int nml_udp_listener_run(nml_udp_listener *l)
+static int nml_udp_listener_run(nml_udp_listener *l)
 {
 	udp_accept(l);
 	return 0;
 }
+
+const struct nml_udp_listener_if nml_udp_listener_interface = {
+	nml_udp_listener_create,
+	nml_udp_listener_destroy,
+	nml_udp_listener_conf,
+	nml_udp_listener_run,
+};

@@ -1,11 +1,21 @@
-/** netmill: executor: generate certificate file
+/** netmill: ssl: generate certificate file
 2023, Simon Zolin */
 
 #include <netmill.h>
-#include <exe/shared.h>
 #include <util/ssl.h>
 #include <ffsys/random.h>
 #include <ffbase/args.h>
+
+extern const nml_exe *exe;
+
+#define syserrlog(...) \
+	exe->log(NULL, NML_LOG_SYSERR, "cert", NULL, __VA_ARGS__)
+
+#define errlog(...) \
+	exe->log(NULL, NML_LOG_ERR, "cert", NULL, __VA_ARGS__)
+
+#define infolog(...) \
+	exe->log(NULL, NML_LOG_INFO, "cert", NULL, __VA_ARGS__)
 
 struct cert_conf {
 	char*	output;
@@ -52,6 +62,9 @@ end:
 	ffstr_free(&cbuf);
 	return r;
 }
+
+#define R_DONE  100
+#define R_BADVAL  101
 
 static int cert_fin(void *obj)
 {
@@ -111,7 +124,7 @@ static int cert_fin(void *obj)
 
 static int cert_help()
 {
-	help_info_write(
+	exe->print(
 "Generate certificate+key PEM file\n\
 \n\
     `netmill cert generate` [OPTIONS]\n\
@@ -141,7 +154,6 @@ static const struct ffarg cert_gen_args[] = {
 	{ "serial",		'u',	O(serial) },
 	{ "subject",	'S',	O(subject) },
 	{ "until",		'S',	O(until) },
-	{ "",			'1',	cert_fin },
 	{}
 };
 #undef O
@@ -153,9 +165,46 @@ static const struct ffarg cert_args[] = {
 	{}
 };
 
-struct ffarg_ctx cert_ctx()
+static nml_op* cert_create(char **argv)
 {
 	struct cert_conf *cc = ffmem_new(struct cert_conf);
-	struct ffarg_ctx ax = { cert_args, cc };
-	return ax;
+
+	uint n = 0;
+	while (argv[n]) {
+		n++;
+	}
+
+	struct ffargs as = {};
+	int r = ffargs_process_argv(&as, cert_args, cc, FFARGS_O_PARTIAL | FFARGS_O_DUPLICATES, argv, n);
+	if (r) {
+		if (r == R_DONE)
+		{}
+		else if (r == R_BADVAL)
+			errlog("command line: near '%s': bad value\n", as.argv[as.argi-1]);
+		else
+			errlog("command line: %s\n", as.error);
+		return NULL;
+	}
+
+	return cc;
 }
+
+static void cert_close(nml_op *op)
+{
+}
+
+static void cert_run(nml_op *op)
+{
+	cert_fin(op);
+}
+
+static void cert_signal(nml_op *op, uint signal)
+{
+}
+
+const struct nml_operation_if nml_op_cert = {
+	cert_create,
+	cert_close,
+	cert_run,
+	cert_signal,
+};

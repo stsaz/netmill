@@ -1,14 +1,19 @@
 # netmill: HTTP server
 
-EXE_OBJ += \
+MODS += http.$(SO)
+HTSV_OBJ += \
+	http-sv-mod.o \
 	http-sv-server.o \
 	http-sv-client.o \
 	http-sv-chain.o \
 	http-sv-proxy.o
 
-ifeq "$(NML_HTTP_CLIENT)" "1"
-	EXE_OBJ += http-sv-proxy-chain.o
+ifdef HTCL_OBJ
+	HTSV_OBJ += http-sv-proxy-chain.o
 endif
 
 http-sv-%.o: $(NETMILL)/src/http-server/%.c
 	$(C) $(CFLAGS) $< -o $@
+
+http.$(SO): $(HTSV_OBJ) $(HTCL_OBJ)
+	$(LINK) -shared $+ $(LINKFLAGS) -o $@

@@ -3,7 +3,7 @@
 
 #include <http-client/client.h>
 
-nml_http_client* nml_http_client_new()
+nml_http_client* nml_http_client_create()
 {
 	nml_http_client *c = ffmem_zalloc(sizeof(nml_http_client));
 	return c;
@@ -31,9 +31,11 @@ static void conf_init(struct nml_http_client_conf *conf)
 	conf->method = FFSTR_Z("GET");
 }
 
+void nml_http_client_run(nml_http_client *c);
+
 int nml_http_client_conf(nml_http_client *c, struct nml_http_client_conf *conf)
 {
-	if (c == NULL) {
+	if (!c) {
 		conf_init(conf);
 		return 0;
 	}
@@ -46,7 +48,7 @@ int nml_http_client_conf(nml_http_client *c, struct nml_http_client_conf *conf)
 
 	c->wake = (void*)nml_http_client_run;
 
-	if (NULL == (c->kev = c->conf->core.kev_new(c->conf->boss)))
+	if (!(c->kev = conf->core.kev_new(conf->boss)))
 		return -1;
 	c->kev->rhandler = (void*)nml_http_client_run;
 	c->kev->whandler = (void*)nml_http_client_run;
@@ -193,3 +195,10 @@ void nml_http_client_run(nml_http_client *c)
 end:
 	ocl_signal_parent(c);
 }
+
+const struct nml_http_client_if nml_http_client_interface = {
+	nml_http_client_create,
+	nml_http_client_free,
+	nml_http_client_conf,
+	nml_http_client_run,
+};

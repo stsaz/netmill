@@ -1,7 +1,7 @@
-/** netmill: http-client: SSL filters
+/** netmill: ssl: extern functions
 2023, Simon Zolin */
 
-#include <http-client/client.h>
+#include <netmill.h>
 #include <util/ssl.h>
 
 #define ctx_errlog(c, ...) \
@@ -34,10 +34,3 @@ err:
 	nml_ssl_uninit(ctx);
 	return -1;
 }
-
-#include <http-client/ssl-send.h>
-#include <http-client/ssl-receive.h>
-
-#include <http-client/ssl-handshake.h>
-#include <http-client/ssl-request.h>
-#include <http-client/ssl-response.h>

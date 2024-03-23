@@ -1,6 +1,8 @@
 /** netmill: firewall: user-kernel data
 2024, Simon Zolin */
 
+#include <linux/types.h>
+
 struct nml_fw_rule_key {
 	__u8 eth_proto[2];
 	__u8 ip_proto; // ipv4.protocol or ipv6.nexthdr
@@ -13,5 +15,6 @@ struct nml_fw_rule {
 };
 
 struct nml_fw_stats {
-	__u64 drop_invalid, drop_by_rule;
+	__u64 matched;
+	__u64 invalid;
 };

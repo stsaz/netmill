@@ -1,13 +1,11 @@
-
-EXE_OBJ += \
-	exe-main.o \
-	exe-cert.o \
-	exe-dns.o \
-	exe-http.o \
-	exe-url.o
+# netmill executor
 
 exe-%.o: $(NETMILL)/src/exe/%.c
 	$(C) $(CFLAGS) $< -o $@
 
-$(EXE): $(EXE_OBJ)
-	$(LINK) $+ $(LINKFLAGS) $(LINK_PTHREAD) -o $@
+%.o: $(NETMILL)/src/%.c
+	$(C) $(CFLAGS) $< -o $@
+
+$(EXE): exe-main.o nif.o \
+		core.$(SO)
+	$(LINK) $+ $(LINKFLAGS) $(LINK_RPATH_ORIGIN) $(LINK_PTHREAD) -o $@

@@ -4,7 +4,6 @@
 #include <http-client/connect-cache.h>
 #include <http-client/connect.h>
 #include <http-client/io.h>
-#include <http-client/ssl.h>
 #include <http-client/request.h>
 #include <http-client/request-send.h>
 #include <http-client/response-receive.h>

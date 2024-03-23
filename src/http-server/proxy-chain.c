@@ -3,6 +3,7 @@
 
 #include <http-client/client.h>
 #include <http-server/proxy-data.h>
+#include <util/util.h>
 
 extern void http_sv_proxy_wake(struct http_sv_proxy *p);
 
@@ -87,10 +88,21 @@ const nml_http_cl_component nml_http_cl_proxy_output = {
 	"proxy-output"
 };
 
+extern const nml_http_cl_component
+	nml_http_cl_resolve,
+	nml_http_cl_connection_cache,
+	nml_http_cl_connect,
+	nml_http_cl_io,
+	nml_http_cl_send,
+	nml_http_cl_recv,
+	nml_http_cl_response,
+	nml_http_cl_request,
+	nml_http_cl_transfer;
 
-const nml_http_cl_component* http_cl_chain[] = {
+const nml_http_cl_component* htsv_http_cl_chain[] = {
 	&nml_http_cl_proxy_input,
 	&nml_http_cl_resolve,
+	//@ connection cache
 	&nml_http_cl_connect,
 	&nml_http_cl_request,
 	&nml_http_cl_send,
@@ -102,9 +114,10 @@ const nml_http_cl_component* http_cl_chain[] = {
 };
 
 /** CONNECT request processing filters */
-const nml_http_cl_component* http_cl_tunnel_chain[] = {
+const nml_http_cl_component* htsv_http_cl_tunnel_chain[] = {
 	&nml_http_cl_proxy_input,
 	&nml_http_cl_resolve,
+	//@ connection cache
 	&nml_http_cl_connect,
 	&nml_http_cl_io,
 	&nml_http_cl_proxy_output,

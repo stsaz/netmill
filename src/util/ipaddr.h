@@ -1,4 +1,4 @@
-/** ff: IPv4 address
+/** network: IPv4/IPv6 address functions
 2020, Simon Zolin
 */
 
@@ -13,6 +13,11 @@ CONVERT
 	ffip4_parse_subnet ffip6_parse_subnet
 	ffip_port_split
 	ffip4_tostr ffip4_tostrz ffip6_tostr ffip6_tostrz ffip46_tostr
+HEADERS
+	ffip4_checksum
+	ffip4_hdr_fill
+	ffip4_hdr_str ffip6_hdr_str
+	ip_sum
 */
 
 #pragma once
@@ -21,7 +26,7 @@ CONVERT
 
 typedef struct { char a[4]; } ffip4;
 
-#define FFIP4_STRLEN  FFS_LEN("000.000.000.000")
+#define FFIP4_STRLEN  15 // "000.000.000.000"
 
 /** Compare two IPv4 addresses */
 static inline int ffip4_cmp(const ffip4 *ip1, const ffip4 *ip2)
@@ -95,6 +100,8 @@ static inline int ffip4_parse(ffip4 *ip4, const char *s, ffsize len)
 
 	return -1;
 }
+
+#define ffip4_parsez(ip4, sz)  ffip4_parse(ip4, sz, ffsz_len(sz))
 
 /** Parse IPv4+subnet pair, e.g. "1.2.3.0/24"
 Return subnet mask bits;
@@ -402,4 +409,162 @@ static inline int ffip_port_split(ffstr s, void *ip6, ffuint *port)
 	if (!ffstr_toint(&s, port, FFS_INT16))
 		return -4; // bad port
 	return (r > 0) | 2;
+}
+
+static inline void ffip4_swap(void *a, void *b)
+{
+	uint tmp = *(uint*)a;
+	*(uint*)a = *(uint*)b;
+	*(uint*)b = tmp;
+}
+
+
+struct ffip4_hdr {
+
+#ifdef FF_BIG_ENDIAN
+	u_char version :4 //=4
+		, ihl :4; //>=5
+	u_char dscp :6
+		, ecn :2;
+#else
+	u_char ihl :4
+		, version :4;
+	u_char ecn :2
+		, dscp :6;
+#endif
+
+	u_char total_len[2];
+	u_char id[2];
+	u_char frag[2]; // flags[3]:[res, dont_frag, more_frags]  frag_off[13]
+	u_char ttl;
+	u_char proto; // enum FFIP4_PROTO
+	u_char crc[2];
+
+	u_char src[4], dst[4];
+
+	u_char opts[0];
+};
+
+enum FFIP4_PROTO {
+	FFIP_ICMP = 1,
+	FFIP_TCP = 6,
+	FFIP_UDP = 17,
+};
+
+#define ffip4_hdr_frag_more(ip4) (!!((ip4)->frag[0] & 0x20))
+#define ffip4_hdr_frag_dont(ip4) (!!((ip4)->frag[0] & 0x40))
+
+/** Fragment offset.
+The last one has `more_frags=0`. */
+#define ffip4_hdr_frag_off(ip4)  ((ffint_be_cpu16_ptr((ip4)->frag) & 0x1fff) * 8)
+
+#define ffip4_hdr_len(ip4)  ((ip4)->ihl * 4)
+
+#define ffip4_hdr_datalen(ip4)  ffint_be_cpu16_ptr((ip4)->total_len) - ffip4_hdr_len(ip4)
+
+/** Compute IPv4 header checksum. */
+static inline uint ffip4_checksum(const void *ip4_hdr, uint ihl, uint with_checksum)
+{
+	const uint *n = ip4_hdr;
+
+	uint64 sum = n[0];
+	sum += n[1];
+	sum += (with_checksum) ? n[2] : (n[2] & 0xffff);
+	sum += n[3];
+	sum += n[4];
+
+	if (ff_unlikely(ihl > 5)) {
+		for (uint i = 5;  i < ihl;  i++) {
+			sum += n[i];
+		}
+	}
+
+	// Add hi-word to low-word with Carry flag: (HI(sum) + LO(sum)) + CF
+	sum = (sum >> 16) + (sum & 0xffff);
+	sum = (sum >> 16) + (sum & 0xffff);
+
+	return ~sum & 0xffff;
+}
+
+static inline uint ffip4_hdr_fill(struct ffip4_hdr *h, uint data_len, uint id, uint ttl, uint proto
+	, const void *src, const void *dst)
+{
+	*(ushort*)h = ffint_be_cpu16(0x4500);
+	*(ushort*)h->total_len = ffint_be_cpu16(sizeof(struct ffip4_hdr) + data_len);
+	*(ushort*)h->id = ffint_be_cpu16(id);
+	*(ushort*)h->frag = 0;
+	h->ttl = ttl;
+	h->proto = proto;
+	*(uint*)h->src = *(uint*)src;
+	*(uint*)h->dst = *(uint*)dst;
+	*(ushort*)h->crc = ffip4_checksum(h, 5, 0);
+	return sizeof(struct ffip4_hdr);
+}
+
+static inline int ffip4_hdr_str(const struct ffip4_hdr *ip4, char *buf, size_t cap)
+{
+	char src[FFIP4_STRLEN], dst[FFIP4_STRLEN];
+	uint ns = ffip4_tostr((ffip4*)ip4->src, src, sizeof(src));
+	uint nd = ffip4_tostr((ffip4*)ip4->dst, dst, sizeof(dst));
+	return ffs_format(buf, cap, "%*s -> %*s  id:%xu  len:%u  ttl:%u  proto:%xu"
+		, ns, src
+		, nd, dst
+		, ffint_be_cpu16_ptr(ip4->id), ffint_be_cpu16_ptr(ip4->total_len), ip4->ttl, ip4->proto);
+}
+
+
+struct ffip6_hdr {
+	u_char ver_tc_fl[4]; // ver[4] traf_class[8] flow_label[20]
+	u_char payload_len[2];
+	u_char next_hdr;
+	u_char hop_limit;
+	u_char src[16], dst[16];
+};
+
+#define ffip6_hdr_ver(ip6)  ((ip6)->ver_tc_fl[0] >> 4)
+
+#define ffip6_hdr_datalen(ip6)  ffint_be_cpu16_ptr((ip6)->payload_len)
+
+static inline int ffip6_hdr_str(const struct ffip6_hdr *ip6, char *buf, size_t cap)
+{
+	char src[FFIP6_STRLEN], dst[FFIP6_STRLEN];
+	size_t ns = ffip6_tostr(ip6->src, src, FFIP6_STRLEN);
+	size_t nd = ffip6_tostr(ip6->dst, dst, FFIP6_STRLEN);
+	return ffs_format(buf, cap, "%*s -> %*s  len:%u  proto:%xu"
+		, ns, src
+		, nd, dst
+		, ffint_be_cpu16_ptr(ip6->payload_len), ip6->next_hdr);
+}
+
+
+static ushort _ip_sum_carry(ushort sum, ushort add)
+{
+	ushort r = sum + add;
+	return r + (r < add);
+}
+
+// Add hi-word to low-word with Carry flag: (HI(sum) + LO(sum)) + CF
+static ushort _ip_sum_reduce(ushort sum)
+{
+	sum = (sum >> 16) + (sum & 0xffff);
+	sum = (sum >> 16) + (sum & 0xffff);
+	return sum;
+}
+
+static inline ushort ip_sum(const void *buf, uint len)
+{
+	ushort sum = 0;
+	const ushort *n = buf;
+	while (len >= 2) {
+		sum = _ip_sum_carry(sum, *n++);
+		len -= 2;
+	}
+	if (len > 0)
+		sum = _ip_sum_carry(sum, ((u_char*)n)[0]);
+	return ~_ip_sum_reduce(sum);
+}
+
+static inline void ip_sum_replace(ushort *sum, ushort old, ushort _new)
+{
+	*sum = ~_ip_sum_carry(_ip_sum_carry(~(*sum), ~old), _new);
 }

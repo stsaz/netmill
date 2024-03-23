@@ -1,23 +1,27 @@
 /** netmill: public interface */
 
 #pragma once
+#include <ffsys/error.h>
+#include <util/taskqueue.h>
 #include <ffsys/socket.h>
 #include <ffsys/timerqueue.h>
 #include <ffsys/semaphore.h>
 #include <ffsys/queue.h>
 #include <ffsys/filemon.h>
-#include <util/taskqueue.h>
-#include <util/ipaddr.h>
 #include <ffbase/time.h>
 #include <ffbase/vector.h>
 #include <ffbase/map.h>
 
-#define NML_VERSION  "0.9"
+#define NML_VERSION  "0.10"
+#define NML_CORE_VER  10
 
 typedef unsigned char u_char;
 typedef unsigned short ushort;
 typedef unsigned int uint;
 typedef unsigned long long uint64;
+#include <util/ipaddr.h>
+
+#define NML_ASSERT(X)  assert(X)
 
 enum NML_LOG {
 	NML_LOG_SYSFATAL,
@@ -84,6 +88,28 @@ struct nml_component {
 	char name[16];
 };
 
+
+/** Executor interface */
+typedef struct nml_exe nml_exe;
+struct nml_exe {
+	uint log_level; // enum NML_LOG
+	char *log_date_buffer;
+
+	/** Print log message */
+	void (*log)(void *log_obj, uint level, const char *ctx, const char *id, const char *format, ...);
+
+	/** Get absolute path for files in app directory.
+	Return newly allocated string, free with ffmem_free(). */
+	char* (*path)(const char *name);
+
+	/** Find operation interface in a module.  Load it on first use.
+	name: "module_name.operation_name"
+	*/
+	const void* (*provide)(const char *name);
+
+	void (*print)(const char *text);
+};
+
 struct ffringqueue;
 struct zzkevent;
 typedef struct zzkevent nml_kevent;
@@ -92,20 +118,23 @@ typedef fftimerqueue_node nml_timer;
 typedef fftask nml_task;
 #define nml_task_set(t, func, param)  fftask_set(t, func, param)
 
-/** Core interface, usually implemented by the root object */
+/** Core interface */
 typedef struct nml_core nml_core;
 struct nml_core {
-	struct zzkevent* (*kev_new)(void *boss);
-	void (*kev_free)(void *boss, struct zzkevent *kev);
+	struct zzkevent* (*kev_new)(void *o);
+
+	void (*kev_free)(void *o, struct zzkevent *kev);
 
 	/** Connect fd and zzkevent object */
-	int (*kq_attach)(void *boss, ffsock sk, struct zzkevent *kev, void *obj);
+	int (*kq_attach)(void *o, ffsock sk, struct zzkevent *kev, void *obj);
 
-	ffkq (*kq)(void *boss);
+	ffkq (*kq)(void *o);
 
-	void (*timer)(void *boss, nml_timer *tmr, int interval_msec, nml_func func, void *param);
-	void (*task)(void *boss, nml_task *t, uint flags);
-	fftime (*date)(void *boss, ffstr *dts);
+	void (*timer)(void *o, nml_timer *tmr, int interval_msec, nml_func func, void *param);
+
+	void (*task)(void *o, nml_task *t, uint flags);
+
+	fftime (*date)(void *o, ffstr *dts);
 };
 
 struct nml_address {
@@ -114,7 +143,7 @@ struct nml_address {
 };
 
 
-/** Worker: default 'nml_core' implementation */
+/** Worker: implements `nml_core` interface. */
 
 struct nml_wrk_conf {
 	void *opaque;
@@ -123,7 +152,7 @@ struct nml_wrk_conf {
 	void (*log)(void *log_obj, uint level, const char *ctx, const char *id, const char *format, ...);
 	void *log_obj;
 	const char *log_ctx;
-	char *log_date_buffer;
+	char *log_date_buffer; // the worker periodically writes new datetime (as a NULL-terminated string) here
 
 	/** KCQ SQ and semaphore for offloading kernel operations.
 	NULL: don't use KCQ */
@@ -136,16 +165,63 @@ struct nml_wrk_conf {
 };
 
 typedef struct nml_wrk nml_wrk;
+typedef struct nml_worker_if nml_worker_if;
+struct nml_worker_if {
+	nml_wrk* (*create)(nml_core *core);
+	void (*free)(nml_wrk *w);
+	int (*conf)(nml_wrk *w, struct nml_wrk_conf *conf);
+	int (*run)(nml_wrk *w);
+	void (*stop)(nml_wrk *w);
+};
 
-FF_EXTERN const nml_core nml_wrk_core_if;
-FF_EXTERN nml_wrk* nml_wrk_new();
-FF_EXTERN void nml_wrk_free(nml_wrk *w);
-FF_EXTERN int nml_wrk_conf(nml_wrk *w, struct nml_wrk_conf *conf);
-FF_EXTERN int nml_wrk_run(nml_wrk *w);
-FF_EXTERN void nml_wrk_stop(nml_wrk *w);
+/* netmill module.
+Usage:
+. Executor gets the operation name from user command line
+. Core loads the corresponding module file and imports "netmill_module" symbol.
+  A module implements `nml_module` interface and exports it as "netmill_module".
+. Core checks if the loaded module is compatible with Core
+. Core calls `fcom_module.provide()` to get operation interface
+. Core calls `fcom_module.init()`
+. Executor calls `nml_operation_if.create()` and `run()` and passes the control to Operator
+. Executor passes all system signals from the user to Operator while it's running
+. Operator calls `nml_core.signal()` to exit
+. Core calls `fcom_module.destroy()`
+*/
+
+typedef void nml_op;
+
+/** Primary operation interface. */
+typedef struct nml_operation_if nml_operation_if;
+struct nml_operation_if {
+	/**
+	argv: NULL-terminated array of command-line parameters */
+	nml_op* (*create)(char **argv);
+	void (*close)(nml_op *op);
+	void (*run)(nml_op *op);
+	void (*signal)(nml_op *op, uint signal);
+};
+
+/** A module exports this interface as "netmill_module". */
+typedef struct nml_module nml_module;
+struct nml_module {
+	const char version[12];
+	uint ver_core;
+	void (*init)(const nml_exe *x);
+	void (*close)();
+	const void* (*provide)(const char *name);
+};
+
+#define NML_MOD_DEFINE(name) \
+	FF_EXPORT const struct nml_module netmill_module = { \
+		NML_VERSION, \
+		NML_CORE_VER, \
+		name##_init, \
+		name##_destroy, \
+		name##_provide, \
+	}
 
 
-/** TCP & UDP Listener: sw-module which calls the parent when a new inbound connection is established */
+/** TCP & UDP Listener: call the parent when a new inbound connection is established. */
 
 struct nml_tcp_listener_conf {
 	uint log_level; // enum NML_LOG
@@ -164,10 +240,13 @@ struct nml_tcp_listener_conf {
 };
 
 typedef struct nml_tcp_listener nml_tcp_listener;
-FF_EXTERN nml_tcp_listener* nml_tcp_listener_new();
-FF_EXTERN void nml_tcp_listener_free(nml_tcp_listener *l);
-FF_EXTERN int nml_tcp_listener_conf(nml_tcp_listener *l, struct nml_tcp_listener_conf *conf);
-FF_EXTERN int nml_tcp_listener_run(nml_tcp_listener *l);
+typedef struct nml_tcp_listener_if nml_tcp_listener_if;
+struct nml_tcp_listener_if {
+	nml_tcp_listener* (*create)();
+	void (*free)(nml_tcp_listener *l);
+	int (*conf)(nml_tcp_listener *l, struct nml_tcp_listener_conf *conf);
+	int (*run)(nml_tcp_listener *l);
+};
 
 struct nml_udp_listener_conf {
 	uint log_level; // enum NML_LOG
@@ -184,10 +263,58 @@ struct nml_udp_listener_conf {
 };
 
 typedef struct nml_udp_listener nml_udp_listener;
-FF_EXTERN nml_udp_listener* nml_udp_listener_new();
-FF_EXTERN void nml_udp_listener_free(nml_udp_listener *l);
-FF_EXTERN int nml_udp_listener_conf(nml_udp_listener *l, struct nml_udp_listener_conf *conf);
-FF_EXTERN int nml_udp_listener_run(nml_udp_listener *l);
+typedef struct nml_udp_listener_if nml_udp_listener_if;
+struct nml_udp_listener_if {
+	nml_udp_listener* (*create)();
+	void (*free)(nml_udp_listener *l);
+	int (*conf)(nml_udp_listener *l, struct nml_udp_listener_conf *conf);
+	int (*run)(nml_udp_listener *l);
+};
+
+
+/** Cache: in-memory data storage */
+
+typedef struct nml_cache_ctx nml_cache_ctx;
+
+typedef void (*nml_cache_destroy_t)(void *opaque, ffstr name, ffstr data);
+struct nml_cache_conf {
+	uint	log_level; // enum NML_LOG
+	void	*log_obj;
+	void	(*log)(void *log_obj, uint level, const char *ctx, const char *id, const char *format, ...);
+
+	uint	max_items;
+	uint	ttl_sec;
+
+	nml_cache_destroy_t destroy;
+	void *opaque;
+};
+
+typedef struct nml_cache_if nml_cache_if;
+struct nml_cache_if {
+	/** Create context. */
+	nml_cache_ctx* (*create)();
+
+	void (*destroy)(nml_cache_ctx *cx);
+
+	/** Initialize or apply configuration. */
+	int (*conf)(nml_cache_ctx *cx, struct nml_cache_conf *conf);
+
+	/** Reserve data space inside a newly created cache entry.
+	Return data region; user must call add() or free(). */
+	ffstr (*reserve)(nml_cache_ctx *cx, size_t data_len);
+
+	/** Free cache entry.
+	nml_cache_conf.destroy() will be called. */
+	void (*free)(nml_cache_ctx *cx, ffstr data);
+
+	/** Add data to cache.
+	name: stored internally as-is and is passed to nml_cache_conf.destroy() */
+	int (*add)(nml_cache_ctx *cx, ffstr name, ffstr data);
+
+	/** Fetch and remove data from cache index.
+	User must call free(). */
+	ffstr (*fetch)(nml_cache_ctx *cx, ffstr name);
+};
 
 
 /* SSL configuration */
@@ -202,21 +329,103 @@ struct nml_ssl_ctx {
 	void *ctx; // ffssl_ctx*
 };
 
-FF_EXTERN int nml_ssl_init(struct nml_ssl_ctx *ctx);
-FF_EXTERN void nml_ssl_uninit(struct nml_ssl_ctx *ctx);
+typedef struct ssl_st ffssl_conn;
+struct ffssl_cert_newinfo;
+typedef struct nml_ssl_if nml_ssl_if;
+struct nml_ssl_if {
+	int (*init)(struct nml_ssl_ctx *ctx);
+	void (*uninit)(struct nml_ssl_ctx *ctx);
+	void (*conn_free)(ffssl_conn *c);
+	int (*cert_pem_create)(const char *fn, uint pkey_bits, struct ffssl_cert_newinfo *ci);
+};
 
-FF_EXTERN const nml_http_cl_component
-	nml_http_cl_ssl_handshake,
-	nml_http_cl_ssl_recv,
-	nml_http_cl_ssl_send,
-	nml_http_cl_ssl_req,
-	nml_http_cl_ssl_resp;
+#ifdef NML_STATIC_LINKING
+FF_EXTERN void nml_ssl_uninit(struct nml_ssl_ctx *ctx);
+FF_EXTERN int nml_ssl_init(struct nml_ssl_ctx *ctx);
+#endif
+
+
+/** HTTP Client: sw-module that calls the user's filter chain for each outbound connection */
+
+struct nml_http_client_conf {
+	void *opaque;
+
+	uint log_level; // enum NML_LOG
+	void *log_obj;
+	void (*log)(void *log_obj, uint level, const char *ctx, const char *id, const char *format, ...);
+	char id[12];
+
+	void *wake_param;
+	void (*wake)(void *param);
+
+	struct nml_core core;
+	void *boss;
+
+	ffstr method,
+		host, // "hostname[:port]"
+		path,
+		headers;
+	const nml_http_cl_component **chain;
+
+	ffstr proxy_host;
+	union {
+		uint proxy_port;
+		uint server_port; // override port value from 'host'
+	};
+
+	uint connect_timeout_msec, send_timeout_msec;
+	struct {
+		uint hdr_buf_size, max_buf, body_buf_size;
+		uint timeout_msec;
+	} receive;
+
+	struct {
+		const nml_cache_if *cif;
+		nml_cache_ctx *cache;
+	} connect;
+
+	const nml_ssl_if *slif;
+	struct nml_ssl_ctx *ssl_ctx;
+
+	uint max_redirect;
+	uint debug_data_dump_len;
+};
+
+typedef struct nml_http_client nml_http_client;
+typedef struct nml_http_client_if nml_http_client_if;
+struct nml_http_client_if {
+	nml_http_client* (*create)();
+	void (*free)(nml_http_client *c);
+	int (*conf)(nml_http_client *c, struct nml_http_client_conf *conf);
+	void (*run)(nml_http_client *c);
+};
+
+#ifdef NML_STATIC_LINKING
+FF_EXTERN nml_http_client* nml_http_client_create();
+FF_EXTERN void nml_http_client_free(nml_http_client *c);
+FF_EXTERN int nml_http_client_conf(nml_http_client *c, struct nml_http_client_conf *conf);
+FF_EXTERN void nml_http_client_run(nml_http_client *c);
+#endif
+
+struct nml_http_cl_component {
+	int		(*open)(nml_http_client *c);
+	void	(*close)(nml_http_client *c);
+	int		(*process)(nml_http_client *c);
+	char	name[16];
+};
+
+
+/** HTTP Client: Connection Cache */
+
+#ifdef NML_STATIC_LINKING
+FF_EXTERN void nml_http_cl_conn_cache_destroy(void *opaque, ffstr name, ffstr data);
+#endif
 
 
 /** HTTP Server: high-level module with a flexible setup:
- calls the user's filter chain for each inbound connection;
- maintains the necessary infrastructure (KQ, TCP listener, timer queue, task queue)
- and implements Core interface */
+* runs Worker
+* listens on TCP port
+* calls the user's filter chain for each inbound connection */
 
 typedef struct nml_http_sv_conn nml_http_sv_conn;
 struct nml_http_server_conf {
@@ -225,7 +434,7 @@ struct nml_http_server_conf {
 	uint log_level; // enum NML_LOG
 	void (*log)(void *log_obj, uint level, const char *ctx, const char *id, const char *format, ...);
 	void *log_obj;
-	char *log_date_buffer;
+	char *log_date_buffer; // passed to `nml_wrk_conf`
 
 	struct nml_core core;
 	void (*on_accept)(void *boss, ffsock csock, ffsockaddr *peer);
@@ -241,6 +450,8 @@ struct nml_http_server_conf {
 	void (*cl_destroy)(nml_http_sv_conn *c);
 
 	struct {
+		const nml_worker_if *wif;
+		const nml_tcp_listener_if *lsif;
 		const struct nml_address *listen_addresses;
 		uint	max_connections;
 		uint	events_num;
@@ -290,22 +501,28 @@ struct nml_http_server_conf {
 		ffmap map;
 	} virtspace;
 
+	const nml_http_client_if *hcif;
+	const nml_cache_if *cif;
+
 	uint debug_data_dump_len;
 };
 
 typedef struct nml_http_server nml_http_server;
-FF_EXTERN nml_http_server* nml_http_server_new();
-FF_EXTERN void nml_http_server_free(nml_http_server *srv);
+typedef struct nml_http_server_if nml_http_server_if;
+struct nml_http_server_if {
+	nml_http_server* (*create)();
+	void (*free)(nml_http_server *srv);
 
-/** Set server configuration
-srv==NULL: initialize `conf` with default settings */
-FF_EXTERN int nml_http_server_conf(nml_http_server *srv, struct nml_http_server_conf *conf);
+	/** Set server configuration
+	srv==NULL: initialize `conf` with default settings */
+	int (*conf)(nml_http_server *srv, struct nml_http_server_conf *conf);
 
-/** Run server event loop */
-FF_EXTERN int nml_http_server_run(nml_http_server *srv);
+	/** Run server event loop */
+	int (*run)(nml_http_server *srv);
 
-/** Send stop-signal to the worker thread */
-FF_EXTERN void nml_http_server_stop(nml_http_server *srv);
+	/** Send stop-signal to the worker thread */
+	void (*stop)(nml_http_server *srv);
+};
 
 struct nml_http_sv_component {
 	int		(*open)(nml_http_sv_conn *c);
@@ -314,17 +531,26 @@ struct nml_http_sv_component {
 	char	name[16];
 };
 
+#ifdef NML_STATIC_LINKING
+FF_EXTERN nml_http_server* nml_http_server_create();
+FF_EXTERN void nml_http_server_free(nml_http_server *s);
+FF_EXTERN int nml_http_server_conf(nml_http_server *s, struct nml_http_server_conf *conf);
+FF_EXTERN int nml_http_server_run(nml_http_server *s);
+FF_EXTERN void nml_http_server_stop(nml_http_server *s);
 FF_EXTERN const nml_http_sv_component
 	nml_http_sv_proxy;
+#endif
 
 
 /** HTTP Server: file filter configuration */
 
+#ifdef NML_STATIC_LINKING
 /** Initialize content-type map.
 content_types: buffer on heap (e.g. "text/html htm html\r\n"); user must not use it afterwards */
 FF_EXTERN void nml_http_file_init(struct nml_http_server_conf *conf, ffstr content_types);
 
 FF_EXTERN void nml_http_file_uninit(struct nml_http_server_conf *conf);
+#endif
 
 
 /** HTTP Server: virtual-space filter configuration */
@@ -338,128 +564,19 @@ struct nml_http_virtdoc {
 	void (*handler)(nml_http_sv_conn *c);
 };
 
+#ifdef NML_STATIC_LINKING
 /** Prepare the table of virtual documents.
 docs: static array (must be valid while the module is in use) */
 FF_EXTERN int nml_http_virtspace_init(struct nml_http_server_conf *conf, const struct nml_http_virtdoc *docs);
 
 FF_EXTERN void nml_http_virtspace_uninit(struct nml_http_server_conf *conf);
+#endif
 
 
-/** Cache */
-
-typedef struct nml_cache_ctx nml_cache_ctx;
-
-/** Create context */
-FF_EXTERN nml_cache_ctx* nml_cache_create();
-
-FF_EXTERN void nml_cache_destroy(nml_cache_ctx *cx);
-
-typedef void (*nml_cache_destroy_t)(void *opaque, ffstr name, ffstr data);
-struct nml_cache_conf {
-	uint	log_level; // enum NML_LOG
-	void	*log_obj;
-	void	(*log)(void *log_obj, uint level, const char *ctx, const char *id, const char *format, ...);
-
-	uint	max_items;
-	uint	ttl_sec;
-
-	nml_cache_destroy_t destroy;
-	void *opaque;
-};
-
-/** Apply configuration */
-FF_EXTERN int nml_cache_conf(nml_cache_ctx *cx, struct nml_cache_conf *conf);
-
-/** Reserve data space inside a newly created cache entry.
-User must call nml_cache_add() or nml_cache_free(). */
-FF_EXTERN ffstr nml_cache_reserve(nml_cache_ctx *cx, size_t data_len);
-
-/** Free cache entry.
-nml_cache_conf.destroy() will be called. */
-FF_EXTERN void nml_cache_free(nml_cache_ctx *cx, ffstr data);
-
-/** Add data to cache. */
-FF_EXTERN int nml_cache_add(nml_cache_ctx *cx, ffstr name, ffstr data);
-
-/** Fetch and remove data from cache index.
-User must call nml_cache_free(). */
-FF_EXTERN ffstr nml_cache_fetch(nml_cache_ctx *cx, ffstr name);
-
-
-/** HTTP Client: sw-module that calls the user's filter chain for each outbound connection */
-
-struct nml_http_client_conf {
-	void *opaque;
-
-	uint log_level; // enum NML_LOG
-	void *log_obj;
-	void (*log)(void *log_obj, uint level, const char *ctx, const char *id, const char *format, ...);
-	char id[12];
-
-	void *wake_param;
-	void (*wake)(void *param);
-
-	struct nml_core core;
-	void *boss;
-
-	ffstr method,
-		host, // "hostname[:port]"
-		path,
-		headers;
-	const nml_http_cl_component **chain;
-
-	ffstr proxy_host;
-	union {
-		uint proxy_port;
-		uint server_port; // override port value from 'host'
-	};
-
-	uint connect_timeout_msec, send_timeout_msec;
-	struct {
-		uint hdr_buf_size, max_buf, body_buf_size;
-		uint timeout_msec;
-	} receive;
-
-	struct {
-		nml_cache_ctx *cache;
-	} connect;
-
-	struct nml_ssl_ctx *ssl_ctx;
-
-	uint max_redirect;
-	uint debug_data_dump_len;
-};
-
-typedef struct nml_http_client nml_http_client;
-
-FF_EXTERN nml_http_client* nml_http_client_new();
-FF_EXTERN void nml_http_client_free(nml_http_client *c);
-
-FF_EXTERN int nml_http_client_conf(nml_http_client *c, struct nml_http_client_conf *conf);
-
-FF_EXTERN void nml_http_client_run(nml_http_client *c);
-
-struct nml_http_cl_component {
-	int		(*open)(nml_http_client *c);
-	void	(*close)(nml_http_client *c);
-	int		(*process)(nml_http_client *c);
-	char	name[16];
-};
-
-FF_EXTERN const nml_http_cl_component
-	nml_http_cl_resolve,
-	nml_http_cl_connection_cache,
-	nml_http_cl_connect,
-	nml_http_cl_io,
-	nml_http_cl_send,
-	nml_http_cl_recv,
-	nml_http_cl_response,
-	nml_http_cl_request,
-	nml_http_cl_transfer,
-	nml_http_cl_redir;
-
-
-/** DNS Server */
+/** DNS Server:
+* runs Worker
+* listens on UDP port
+* calls the user's filter chain for each request */
 
 enum NML_DNS_BLOCK {
 	NML_DNS_BLOCK_EMPTY,
@@ -477,7 +594,7 @@ struct nml_dns_server_conf {
 	uint log_level; // enum NML_LOG
 	void (*log)(void *log_obj, uint level, const char *ctx, const char *id, const char *format, ...);
 	void *log_obj;
-	char *log_date_buffer;
+	char *log_date_buffer; // passed to `nml_wrk_conf`
 
 	struct nml_core core;
 	void *boss;
@@ -485,6 +602,8 @@ struct nml_dns_server_conf {
 	void (*wake)(nml_dns_sv_conn *c);
 
 	struct {
+		const nml_worker_if *wif;
+		const nml_udp_listener_if *lsif;
 		const struct nml_address *listen_addresses; // server UDP socket listen address (default: <any>:53)
 		uint	max_connections;
 		uint	events_num;
@@ -496,7 +615,7 @@ struct nml_dns_server_conf {
 		uint	v6_only :1;
 	} server;
 
-	const nml_dns_component **chain; // conveyor components for inbound DNS request processing (required)
+	const nml_dns_component **chain; // (Required) Conveyor components for inbound DNS request processing
 
 	struct {
 		ffvec	filenames; // char*[]
@@ -534,15 +653,20 @@ struct nml_dns_server_conf {
 		uint	iserver;
 		uint64	out_reqs, in_msgs, in_data, out_data; // stats
 
-		struct nml_ssl_ctx *doh_ssl_ctx; // DoH client SSL context (required)
+		const nml_http_client_if *hcif; // (Required for DoH)
+		struct nml_ssl_ctx *doh_ssl_ctx; // (Required for DoH) DoH client SSL context
+		const nml_cache_if *cif;
 		nml_cache_ctx *doh_connection_cache; // DoH client connection cache
+		const nml_http_cl_component **doh_chain; // (Required for DoH) Conveyor components for HTTP client
 	} upstreams;
 
 	uint debug_data_dump_len;
 };
 
 typedef struct nml_dns_server nml_dns_server;
-FF_EXTERN nml_dns_server* nml_dns_server_new();
+
+#ifdef NML_STATIC_LINKING
+FF_EXTERN nml_dns_server* nml_dns_server_create();
 FF_EXTERN void nml_dns_server_free(nml_dns_server *srv);
 
 /** Set server configuration
@@ -554,6 +678,7 @@ FF_EXTERN int nml_dns_server_run(nml_dns_server *srv);
 
 /** Send stop-signal to the worker thread */
 FF_EXTERN void nml_dns_server_stop(nml_dns_server *srv);
+#endif
 
 struct nml_dns_component {
 	int		(*open)(nml_dns_sv_conn *c);
@@ -565,6 +690,7 @@ struct nml_dns_component {
 
 /** DNS Server: hosts */
 
+#ifdef NML_STATIC_LINKING
 /** Initialize hosts file.
 conf.hosts.filenames is an array of file names containing host rules. Syntax:
   # comment
@@ -582,34 +708,43 @@ FF_EXTERN int nml_dns_hosts_find(struct nml_dns_server_conf *conf, ffstr name, f
 
 /** Re-read source files if necessary */
 FF_EXTERN void nml_dns_hosts_refresh(struct nml_dns_server_conf *conf);
+#endif
 
 
 /** DNS Server: upstreams */
 
+#ifdef NML_STATIC_LINKING
 /** Initialize upstream servers.
 conf.upstreams.upstreams is an array of DNS server addresses */
 FF_EXTERN int nml_dns_upstreams_init(struct nml_dns_server_conf *conf);
 
 FF_EXTERN void nml_dns_upstreams_uninit(struct nml_dns_server_conf *conf);
+#endif
 
 
 /** DNS Server: UDP upsteam server */
 
+#ifdef NML_STATIC_LINKING
 FF_EXTERN void* nml_dns_udp_create(struct nml_dns_server_conf *conf, const char *addr);
 
 FF_EXTERN void nml_dns_udp_free(void *p);
+#endif
 
 
 /** DNS Server: DoH upsteam server */
 
+#ifdef NML_STATIC_LINKING
 FF_EXTERN void* nml_dns_doh_create(struct nml_dns_server_conf *conf, const char *addr);
 
 FF_EXTERN void nml_dns_doh_free(void *p);
+#endif
 
 
 /** DNS Server: file-cache */
 
+#ifdef NML_STATIC_LINKING
 FF_EXTERN int nml_dns_filecache_init(struct nml_dns_server_conf *conf);
+#endif
 
 
 /** Get information about system network interfaces */

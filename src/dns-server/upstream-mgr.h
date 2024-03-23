@@ -11,6 +11,9 @@ struct upstream {
 
 int nml_dns_upstreams_init(struct nml_dns_server_conf *conf)
 {
+	if (!conf->upstreams.upstreams.len)
+		return 0;
+
 	if (!ffvec_allocT(&conf->upstreams.servers, conf->upstreams.upstreams.len, struct upstream))
 		return -1;
 

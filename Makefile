@@ -16,14 +16,17 @@ ifeq "$(OS)" "windows"
 endif
 
 
-CFLAGS := -Wall -Wextra -Wno-unused-parameter -Wno-sign-compare -Wno-multichar
+CFLAGS := -std=c99
+CFLAGS += -Wall -Wextra -Wno-unused-parameter -Wno-sign-compare -Wno-multichar
 ifeq "$(COMPILER)" "gcc"
 	CFLAGS += -Wno-nonnull -Wno-array-bounds -Wno-stringop-overflow
 endif
-CFLAGS += -DFFBASE_HAVE_FFERR_STR
-CFLAGS += -MMD -MP
-CFLAGS += -I$(NETMILL)/src -I$(FFSYS) -I$(FFBASE)
-CFLAGS += -g
+CFLAGS += -DNML_STATIC_LINKING -DFFBASE_HAVE_FFERR_STR \
+	-MMD -MP \
+	-I$(NETMILL)/src -I$(FFSYS) -I$(FFBASE) \
+	-fPIC \
+	-g
+CFLAGS += -march=nehalem
 ifeq "$(DEBUG)" "1"
 	CFLAGS += -DNML_ENABLE_LOG_EXTRA -DFF_DEBUG -O0 -Werror
 else
@@ -43,8 +46,7 @@ CFLAGS += $(CFLAGS_USER)
 LINKFLAGS += $(LINKFLAGS_USER)
 
 
-default: $(EXE) \
-		nmlfw-xdp-ebpf.o
+default: build
 ifneq "$(DEBUG)" "1"
 	$(SUBMAKE) strip-debug
 endif
@@ -52,35 +54,16 @@ endif
 
 -include $(wildcard *.d)
 
-EXE_OBJ += \
-	worker.o \
-	cache.o \
-	tcp-listener.o udp-listener.o \
-	nif.o
-
+include $(NETMILL)/src/core/Makefile
+include $(NETMILL)/src/exe/Makefile
 include $(NETMILL)/src/dns-server/Makefile
 include $(NETMILL)/src/http-client/Makefile
 include $(NETMILL)/src/http-server/Makefile
 include $(NETMILL)/src/firewall/Makefile
+include $(NETMILL)/src/ssl/Makefile
 
-%.o: $(NETMILL)/src/%.c
-	$(C) $(CFLAGS) $< -o $@
-
-EXE_OBJ += ffssl.o
-CFLAGS_OPENSSL := $(CFLAGS) -Wno-deprecated-declarations
-ifeq "$(OS)" "windows"
-	CFLAGS_OPENSSL += -I$(NETMILL)/3pt/openssl/openssl-3.1.3/include
-	LINKFLAGS += -L$(NETMILL)/3pt/_$(OS)-$(CPU) -lssl-3-x64 -lcrypto-3-x64
-	LIBS3 += \
-		$(NETMILL)/3pt/_$(OS)-$(CPU)/libssl-3-x64.dll \
-		$(NETMILL)/3pt/_$(OS)-$(CPU)/libcrypto-3-x64.dll
-else
-	LINKFLAGS += -lssl -lcrypto
-endif
-ffssl.o: $(NETMILL)/src/util/ffssl.c
-	$(C) $(CFLAGS_OPENSSL) $< -o $@
-
-include $(NETMILL)/src/exe/Makefile
+build: $(EXE) \
+	$(MODS)
 
 strip-debug: $(EXE).debug
 %.debug: %
@@ -94,17 +77,22 @@ clean:
 
 app:
 	mkdir -p $(APP_DIR)
-	cp -ru $(EXE) \
-		nmlfw-xdp-ebpf.o \
+	cp -ru $(EXE) core.$(SO) \
 		$(NETMILL)/content-types.conf \
 		$(NETMILL)/README.md \
 		$(NETMILL)/LICENSE \
 		$(NETMILL)/www \
 		$(APP_DIR)
+
+	mkdir -p $(APP_DIR)/mod
+	cp -ru $(MODS) \
+		$(APP_DIR)/mod
 ifneq "$(LIBS3)" ""
 	cp -ru $(LIBS3) \
-		$(APP_DIR)
+		$(APP_DIR)/mod
 endif
+	chmod 644 $(APP_DIR)/mod/*
+
 ifeq "$(OS)" "windows"
 	mv $(APP_DIR)/README.md $(APP_DIR)/README.txt
 	unix2dos $(APP_DIR)/README.txt

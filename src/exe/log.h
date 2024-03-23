@@ -3,8 +3,6 @@
 
 void exe_log(void *opaque, uint level, const char *ctx, const char *id, const char *fmt, ...)
 {
-	struct exe *x = opaque;
-
 	if (level > x->conf.log_level)
 		return;
 
@@ -39,7 +37,7 @@ void log_init()
 	};
 	ffmem_copy(x->log.levels, levels, sizeof(levels));
 
-	x->log.stdout_color = !ffstd_attr(ffstdout, FFSTD_VTERM, FFSTD_VTERM);
+	x->log.use_color = !ffstd_attr(ffstdout, FFSTD_VTERM, FFSTD_VTERM);
 	static const char colors[][8] = {
 		/*NML_LOG_SYSFATAL*/FFSTD_CLR_B(FFSTD_RED),
 		/*NML_LOG_SYSERR*/	FFSTD_CLR(FFSTD_RED),
@@ -69,7 +67,7 @@ int log_open()
 			return -1;
 		}
 		x->log.fd = fd;
-		x->log.stdout_color = 0;
+		x->log.use_color = 0;
 	}
 	return 0;
 }

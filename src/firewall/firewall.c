@@ -2,15 +2,40 @@
 2024, Simon Zolin */
 
 #include <netmill.h>
-#include <exe/shared.h>
+
+const nml_exe *exe;
+
+#define syserrlog(...) \
+	exe->log(NULL, NML_LOG_SYSERR, "firewall", NULL, __VA_ARGS__)
+
+#define errlog(...) \
+	exe->log(NULL, NML_LOG_ERR, "firewall", NULL, __VA_ARGS__)
+
+#define infolog(...) \
+	exe->log(NULL, NML_LOG_INFO, "firewall", NULL, __VA_ARGS__)
+
+#define verblog(...) \
+do { \
+	if (exe->log_level >= NML_LOG_VERBOSE) \
+		exe->log(NULL, NML_LOG_VERBOSE, "firewall", NULL, __VA_ARGS__); \
+} while (0)
+
+#define dbglog(...) \
+do { \
+	if (exe->log_level >= NML_LOG_DEBUG) \
+		exe->log(NULL, NML_LOG_DEBUG, "firewall", NULL, __VA_ARGS__); \
+} while (0)
+
+#define R_DONE  100
+#define R_BADVAL  101
 
 static int fw_help()
 {
-	help_info_write(
+	exe->print(
 "Ingress firewall\n\
     `netmill firewall` OPTIONS\n\
 Options:\n\
-  `interface` INDEX|NAME \n\
+  `interface` NAME\n\
 \n\
   `eth_proto` ip|ipv6|NUMBER\n\
   `ip_proto` icmp|udp|tcp|NUMBER\n\
@@ -22,12 +47,13 @@ Options:\n\
 
 #include <ffbase/args.h>
 #include <ffsys/std.h>
-#include <bpf/libbpf.h>
 #include <firewall/data.h>
-#include <xdp/libxdp.h>
-#include <linux/ip.h>
-#include <linux/if_ether.h>
 #include <util/util.h>
+#include <util/lxdp.h>
+#include <util/ethernet.h>
+#include <util/ipaddr.h>
+
+#define RX_BURST_SIZE  128
 
 struct firewall_rule {
 	uint	eth_proto;
@@ -37,71 +63,58 @@ struct firewall_rule {
 
 struct firewall_conf {
 	uint	if_index;
+	const char *if_name;
+	const char *obj_filename;
 	struct firewall_rule rule;
 };
 
 struct firewall {
 	uint stop;
-	struct xdp_program *prog;
-	struct bpf_object *bpf_obj;
+
+	lxdp lx;
 	struct bpf_map *map_rules;
 	struct bpf_map *map_stats;
+	struct bpf_map *map_xsk;
+	lxdpsk lxsk;
 
-	struct firewall_conf *conf;
+	lxdpbuf* packets[RX_BURST_SIZE];
+
+	struct firewall_conf conf;
 };
-static struct firewall *fw;
 
-static void fw_err(const char *func, int code)
+static int fw_attach(struct firewall *fw)
 {
-	if (code)
-		ffstdout_fmt("ERROR: %s: %E\n", func, -code);
-	else
-		ffstdout_fmt("ERROR: %s\n", func);
-}
-
-static int fw_attach()
-{
-	int e;
-	struct bpf_object_open_opts opts = {
-		.sz = sizeof(struct bpf_object_open_opts),
-	};
-
-	// if (!(fw->bpf_obj = bpf_object__open_file("nmlfw-xdp-ebpf.o", &opts))) {
-	// 	err_func = "bpf_object__open_file";
-	// 	goto err;
-	// }
-
-	DECLARE_LIBXDP_OPTS(xdp_program_opts, xdp_opts, 0);
-
-	xdp_opts.open_filename = "nmlfw-xdp-ebpf.o";
-	xdp_opts.opts = &opts;
-
-	if (!(fw->prog = xdp_program__create(&xdp_opts))) {
-		fw_err("xdp_program__create", libxdp_get_error(fw->prog));
-		return -1;
-	}
-	if ((e = xdp_program__attach(fw->prog, fw->conf->if_index, 0, 0))) {
-		fw_err("xdp_program__attach", e);
-		return -1;
-	}
-
-	fw->bpf_obj = xdp_program__bpf_obj(fw->prog);
-	return 0;
-}
-
-static int fw_detach()
-{
-	int e;
-	if ((e = xdp_program__detach(fw->prog, fw->conf->if_index, 0, 0))) {
-		fw_err("xdp_program__attach", e);
+	struct lxdp_attach_conf conf = {};
+	if (lxdp_attach(&fw->lx, fw->conf.obj_filename, fw->conf.if_index, &conf)) {
+		errlog("lxdp_attach: %s", lxdp_error(&fw->lx));
 		return -1;
 	}
 	return 0;
 }
 
-static int fw_rule_add(const struct firewall_rule *rule)
+static int fw_detach(struct firewall *fw)
 {
-	infolog("Installing rule: eth:%xu  ip:%xu  l4src:%u  l4dst:%u"
+	lxdp_close(&fw->lx);
+	return 0;
+}
+
+static int fw_xsk_init(struct firewall *fw)
+{
+	struct lxdpsk_conf conf = {};
+	if (lxdpsk_create(&fw->lx, &fw->lxsk, fw->conf.if_name, 0, &conf)) {
+		errlog("lxdpsk_create: %s", lxdp_error(&fw->lx));
+		return -1;
+	}
+	if (lxdpsk_enable(&fw->lxsk, fw->map_xsk)) {
+		errlog("lxdpsk_enable: %s", lxdp_error(&fw->lx));
+		return -1;
+	}
+	return 0;
+}
+
+static int fw_rule_add(struct firewall *fw, const struct firewall_rule *rule)
+{
+	verblog("Installing rule: eth:%04xu  ip:%xu  l4src:%u  l4dst:%u"
 		, rule->eth_proto, rule->ip_proto, rule->l4_src_port, rule->l4_dst_port);
 
 	struct nml_fw_rule_key k = {};
@@ -111,49 +124,37 @@ static int fw_rule_add(const struct firewall_rule *rule)
 	*(ushort*)k.l4_dst_port = ffint_be_cpu16(rule->l4_dst_port);
 	struct nml_fw_rule v = {};
 	if (bpf_map__update_elem(fw->map_rules, &k, sizeof(k), &v, sizeof(v), 0)) {
-		fw_err("bpf_map__update_elem", 0);
+		errlog("bpf_map__update_elem");
 		return -1;
 	}
 	return 0;
 }
 
-static int fw_maps_init()
+static int fw_maps_init(struct firewall *fw)
 {
-	if (!(fw->map_rules = bpf_object__find_map_by_name(fw->bpf_obj, "nml_fw_rule_map"))) {
-		fw_err("bpf_object__find_map_by_name", 0);
+	static const struct lxdp_map_name maps[] = {
+		{ "nml_fw_rule_map",	FF_OFF(struct firewall, map_rules) },
+		{ "nml_fw_stats_map",	FF_OFF(struct firewall, map_stats) },
+		{ "nml_fw_xsk_map",		FF_OFF(struct firewall, map_xsk) },
+		{}
+	};
+	if (lxdp_maps_link(&fw->lx, maps, fw)) {
+		errlog("lxdp_maps_link", lxdp_error(&fw->lx));
 		return -1;
 	}
 
-	if (fw_rule_add(&fw->conf->rule))
+	if (fw_rule_add(fw, &fw->conf.rule))
 		return -1;
 
-	if (!(fw->map_stats = bpf_object__find_map_by_name(fw->bpf_obj, "nml_fw_stats_map"))) {
-		fw_err("bpf_object__find_map_by_name", 0);
-		return -1;
-	}
-
-	// ffvec pin_dir = {};
-	// ffvec_addfmt(&pin_dir, "/sys/fs/bpf/%s%Z", "");
-	// if ((e = bpf_object__unpin_maps(o, pin_dir.ptr))) {
-	// }
-
-	// if ((e = bpf_object__pin_maps(o, pin_dir.ptr))) {
-	// 	err_func = "bpf_object__pin_maps";
-	// 	goto err;
-	// }
-	// ffvec_free(&pin_dir);
 	return 0;
 }
 
-static void fw_cleanup()
+static void fw_cleanup(struct firewall *fw)
 {
-	// if ((e = bpf_object__unpin_maps(o, pin_dir.ptr))) {
-	// }
-
-	fw_detach();
+	fw_detach(fw);
 }
 
-static int fw_stats_display()
+static int fw_stats_display(struct firewall *fw)
 {
 	int e;
 	uint ncpu = libbpf_num_possible_cpus();
@@ -161,52 +162,106 @@ static int fw_stats_display()
 	struct nml_fw_stats *stats = ffmem_alloc(cap);
 	__u32 key = 0;
 	if ((e = bpf_map__lookup_elem(fw->map_stats, &key, sizeof(key), stats, cap, 0))) {
-		fw_err("bpf_map__lookup_elem", e);
+		errlog("bpf_map__lookup_elem: %E", -e);
 		return -1;
 	}
 
 	for (uint i = 1;  i < ncpu;  i++) {
-		stats->drop_by_rule += stats[i].drop_by_rule;
-		stats->drop_invalid += stats[i].drop_invalid;
+		stats->invalid += stats[i].invalid;
 	}
 
 	ffvec v = {};
-	ffvec_addfmt(&v, "drop_by_rule:\t%,U\n", stats->drop_by_rule);
-	ffvec_addfmt(&v, "drop_invalid:\t%,U\n", stats->drop_invalid);
+	ffvec_addfmt(&v, "invalid:\t%,U\n", stats->invalid);
 	ffstdout_write(v.ptr, v.len);
 	ffvec_free(&v);
 	ffmem_free(stats);
 	return 0;
 }
 
-static int fw_setup(struct firewall_conf *conf)
+static int fw_setup(struct firewall *fw)
 {
-	fw = ffmem_new(struct firewall);
-	fw->conf = conf;
-
-	if (fw_attach()) goto err;
-	if (fw_maps_init()) goto err;
+	if (fw_attach(fw)) goto err;
+	if (fw_maps_init(fw)) goto err;
+	if (fw_xsk_init(fw)) goto err;
 	return 0;
 
 err:
 	return -1;
 }
 
-static int fw_run(struct firewall_conf *conf)
+static int fw_pkt(struct firewall *fw, lxdpbuf *p)
 {
+	const void *data = lxdpbuf_data(p);
+
+	char buf[1024];
+	uint len = eth_hdr_str(data, buf, sizeof(buf));
+
+	data += sizeof(struct eth_hdr);
+	p->off_ip = sizeof(struct eth_hdr);
+	lxdpbuf_shift(p, sizeof(struct eth_hdr));
+	const struct ffip4_hdr *ip = data;
+
+	buf[len++] = ' ';
+	buf[len++] = ' ';
+	len += ffip4_hdr_str(ip, buf + len, sizeof(buf) - len);
+	infolog("input: %*s", (size_t)len, buf);
+
+	return -1;
+}
+
+static void fw_process(struct firewall *fw)
+{
+	for (;;) {
+		uint n = lxdpsk_read(&fw->lxsk, fw->packets, RX_BURST_SIZE);
+		if (!n)
+			break;
+
+		for (uint i = 0;  i < n;  i++) {
+			lxdpbuf *p = fw->packets[i];
+			if (!fw_pkt(fw, p)) {
+				lxdpsk_write(&fw->lxsk, &p, 1);
+				dbglog("lxdpsk_write");
+			} else {
+				lxdpsk_buf_release(&fw->lxsk, p);
+			}
+		}
+	}
+
+	lxdpsk_flush(&fw->lxsk);
+}
+
+static int fw_run(struct firewall *fw)
+{
+	ffkq kq = ffkq_create();
+	if (ffkq_attach(kq, lxdpsk_fd(&fw->lxsk), NULL, FFKQ_READ)) {
+		syserrlog("ffkq_attach");
+		return -1;
+	}
+
+	ffkq_time t;
+	ffkq_time_set(&t, -1);
+	ffkq_event events[1];
 	while (!FFINT_READONCE(fw->stop)) {
-		fw_stats_display();
-		sleep(1);
+		int r = ffkq_wait(kq, events, 1, t);
+		if (r < 0) {
+			if (errno != EINTR)
+				syserrlog("ffkq_wait");
+			break;
+		}
+		// dbglog("ffkq_wait");
+		if (r > 0)
+			fw_process(fw);
+		if (0)
+			fw_stats_display(fw);
+		// sleep(1);
 	}
 	return 0;
 }
 
-static void fw_stop()
+static void fw_stop(struct firewall *fw)
 {
 	FFINT_WRITEONCE(fw->stop, 1);
 }
-
-static const job_if fw_job;
 
 static int fw_conf_check(struct firewall_conf *c)
 {
@@ -221,30 +276,30 @@ static int fw_conf_check(struct firewall_conf *c)
 	}
 
 	if ((c->rule.l4_src_port || c->rule.l4_dst_port)
-		&& !(c->rule.ip_proto == IPPROTO_UDP || c->rule.ip_proto == IPPROTO_TCP)) {
+		&& !(c->rule.ip_proto == FFIP_UDP || c->rule.ip_proto == FFIP_TCP)) {
 		errlog("l4_src_port and l4_dst_port are for UDP or TCP only");
 		return R_BADVAL;
 	}
 
-	x->job = &fw_job;
 	return 0;
 }
 
 static int fw_interface(struct firewall_conf *c, ffstr name)
 {
-	if (!ffstr_to_uint32(&name, &c->if_index))
-		c->if_index = ffnetconf_if_index(name);
+	// if (!ffstr_to_uint32(&name, &c->if_index))
+	c->if_index = ffnetconf_if_index(name);
 	if (c->if_index == 0)
 		return R_BADVAL;
+	c->if_name = ffsz_dupstr(&name);
 	return 0;
 }
 
 static int fw_eth_proto(struct firewall_conf *c, ffstr name)
 {
-	if (ffstr_eqz(&name, "ip"))
-		c->rule.eth_proto = ETH_P_IP;
-	else if (ffstr_eqz(&name, "ipv6"))
-		c->rule.eth_proto = ETH_P_IPV6;
+	if (ffstr_ieqz(&name, "ip"))
+		c->rule.eth_proto = ETH_IP4;
+	else if (ffstr_ieqz(&name, "ipv6"))
+		c->rule.eth_proto = ETH_IP6;
 	else {
 		uint n;
 		if (!ffstr_to_uint32(&name, &n))
@@ -256,12 +311,12 @@ static int fw_eth_proto(struct firewall_conf *c, ffstr name)
 
 static int fw_ip_proto(struct firewall_conf *c, ffstr name)
 {
-	if (ffstr_eqz(&name, "icmp"))
-		c->rule.ip_proto = IPPROTO_ICMP;
-	else if (ffstr_eqz(&name, "tcp"))
-		c->rule.ip_proto = IPPROTO_TCP;
-	else if (ffstr_eqz(&name, "udp"))
-		c->rule.ip_proto = IPPROTO_UDP;
+	if (ffstr_ieqz(&name, "icmp"))
+		c->rule.ip_proto = FFIP_ICMP;
+	else if (ffstr_ieqz(&name, "tcp"))
+		c->rule.ip_proto = FFIP_TCP;
+	else if (ffstr_ieqz(&name, "udp"))
+		c->rule.ip_proto = FFIP_UDP;
 	else {
 		uint n;
 		if (!ffstr_to_uint32(&name, &n))
@@ -284,16 +339,73 @@ static const struct ffarg firewall_args[] = {
 };
 #undef O
 
-struct ffarg_ctx firewall_ctx()
+static nml_op* fw_create(char **argv)
 {
-	struct firewall_conf *fc = ffmem_new(struct firewall_conf);
-	struct ffarg_ctx ax = { firewall_args, fc };
-	return ax;
+	struct firewall *fw = ffmem_new(struct firewall);
+
+	uint n = 0;
+	while (argv[n]) {
+		n++;
+	}
+
+	struct ffargs as = {};
+	int r = ffargs_process_argv(&as, firewall_args, &fw->conf, FFARGS_O_PARTIAL | FFARGS_O_DUPLICATES, argv, n);
+	if (r) {
+		if (r == R_DONE)
+		{}
+		else if (r == R_BADVAL)
+			errlog("command line: near '%s': bad value\n", as.argv[as.argi-1]);
+		else
+			errlog("command line: %s\n", as.error);
+		return NULL;
+	}
+
+	fw->conf.obj_filename = exe->path("mod/nmlfw-xdp-ebpf.o");
+	return fw;
 }
 
-static const job_if fw_job = {
-	.setup = fw_setup,
-	.run = fw_run,
-	.stop = fw_stop,
-	.destroy = fw_cleanup,
+static void fw_close(nml_op *op)
+{
+	fw_cleanup(op);
+}
+
+static void _fw_run(nml_op *op)
+{
+	if (fw_setup(op)) return;
+	fw_run(op);
+}
+
+static void fw_signal(nml_op *op, uint signal)
+{
+	fw_stop(op);
+}
+
+static const struct nml_operation_if nml_op_fw = {
+	fw_create,
+	fw_close,
+	_fw_run,
+	fw_signal,
 };
+
+
+static void fw_init(const nml_exe *x)
+{
+	exe = x;
+}
+
+static void fw_destroy()
+{
+}
+
+extern const struct nml_operation_if nml_op_ping;
+
+static const void* fw_provide(const char *name)
+{
+	if (ffsz_eq(name, "firewall"))
+		return &nml_op_fw;
+	if (ffsz_eq(name, "ping"))
+		return &nml_op_ping;
+	return NULL;
+}
+
+NML_MOD_DEFINE(fw);

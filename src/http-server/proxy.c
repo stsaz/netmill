@@ -4,8 +4,8 @@
 #include <http-server/client.h>
 #include <http-server/proxy-data.h>
 
-extern const nml_http_cl_component *http_cl_chain[];
-extern const nml_http_cl_component *http_cl_tunnel_chain[];
+extern const nml_http_cl_component* htsv_http_cl_chain[];
+extern const nml_http_cl_component* htsv_http_cl_tunnel_chain[];
 
 static void http_sv_proxy_on_complete(struct http_sv_proxy *p)
 {
@@ -24,13 +24,16 @@ static int http_sv_proxy_open(nml_http_sv_conn *c)
 {
 	if (c->resp_err) return NMLF_SKIP;
 
+	NML_ASSERT(c->conf->hcif);
+	NML_ASSERT(c->conf->cif);
+
 	struct http_sv_proxy *p = ffmem_new(struct http_sv_proxy);
 	c->proxy = p;
 	p->ic = c;
 	p->svconf = c->conf;
 
 	struct nml_http_client_conf *cc = &p->conf;
-	nml_http_client_conf(NULL, cc);
+	c->conf->hcif->conf(NULL, cc);
 	cc->opaque = p;
 
 	cc->log_level = c->log_level;
@@ -51,7 +54,7 @@ static int http_sv_proxy_open(nml_http_sv_conn *c)
 	if (ffstr_eqz(&method, "CONNECT")) {
 		p->tunnel = 1;
 		c->resp_connection_keepalive = 0;
-		cc->chain = http_cl_tunnel_chain;
+		cc->chain = htsv_http_cl_tunnel_chain;
 
 	} else {
 		cc->method = cl_req_hdr(c, c->req.method);
@@ -61,12 +64,12 @@ static int http_sv_proxy_open(nml_http_sv_conn *c)
 		ffstr_shift(&cc->headers, c->req.line.len + 1);
 		if (cc->headers.ptr[0] == '\n')
 			ffstr_shift(&cc->headers, 1);
-		cc->chain = http_cl_chain;
+		cc->chain = htsv_http_cl_chain;
 	}
 
-	if (NULL == (p->cl = nml_http_client_new()))
+	if (!(p->cl = c->conf->hcif->create()))
 		return NMLF_ERR;
-	if (nml_http_client_conf(p->cl, cc))
+	if (c->conf->hcif->conf(p->cl, cc))
 		return NMLF_ERR;
 	p->filter_index = c->conveyor.cur;
 	return NMLF_OPEN;
@@ -76,7 +79,8 @@ static void http_sv_proxy_close(nml_http_sv_conn *c)
 {
 	struct http_sv_proxy *p = c->proxy;
 	c->proxy = NULL;
-	nml_http_client_free(p->cl);  p->cl = NULL;
+	c->conf->hcif->free(p->cl);
+	p->cl = NULL;
 	c->conf->core.task(c->conf->boss, &p->task, 0);
 	ffmem_free(p);
 }
@@ -150,7 +154,7 @@ static int http_sv_proxy_process(nml_http_sv_conn *c)
 		return NMLF_BACK;
 	}
 
-	nml_http_client_run(p->cl);
+	c->conf->hcif->run(p->cl);
 	return NMLF_ASYNC;
 }
 

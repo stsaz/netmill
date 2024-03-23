@@ -6,23 +6,37 @@ netmill(*under development*) - network tools for Linux, Android, Windows.
 You can use it as a standalone app or as a library via C and Java interface.
 Current features:
 
-* HTTP/1.1 server: local files, auto-index, virtual space, forward proxy (HTTP and tunelling)
-* HTTP/1.1 client
-* DNS server: hosts lists, hosts block lists, upstream servers, persistent cache
-* Certificate generator
+* HTTP/1.1 Server: local files, auto-index, virtual space, forward proxy (HTTP and tunelling)
+* HTTP/1.1 Client
+* DNS Server: hosts lists, hosts block lists, upstream servers, persistent cache
+* X509 Certificate Generator
+* Ingress Firewall (XDP/Linux)
+* ping (XDP/Linux)
 
 Contents:
 
 * [HTTP Server](#http-server)
 * [HTTP Client](#http-client)
 * [DNS Server](#dns-server)
+* [Ingress Firewall](#ingress-firewall)
+* [XDP ping](#xdp-ping)
+* [Certificate Generator](#certificate-generator)
 * [Build](#build)
 * [Install](#install)
-* [Usage](#usage)
 * [HTTP server as a library](#http-server-as-a-library)
 
 
 ## HTTP Server
+
+Examples:
+
+```sh
+# Run HTTP file-server on port `8080` with the current directory as root
+netmill http  listen 8080  www .
+
+# Run HTTP proxy-server
+netmill http  listen 127.0.0.1:8080  proxy
+```
 
 Features:
 
@@ -51,7 +65,15 @@ Limitations:
 
 * HTTP/1.1 only (no HTTP/2)
 
+
 ## HTTP Client
+
+Examples:
+
+```sh
+# Download a file over HTTP
+netmill url https://host.com/path/file
+```
 
 Features:
 
@@ -97,49 +119,7 @@ block.com block2.com
 +un.block.com
 ````
 
-## Build
-
-[Build Instructions](BUILDING.md)
-
-
-## Install
-
-Linux:
-
-* Unpack the archive somewhere, e.g. to `~/bin`:
-
-	```sh
-	mkdir -p ~/bin
-	tar xf netmill-VERSION-linux-amd64.tar.zst -C ~/bin
-	```
-
-* Create a symbolic link:
-
-	```sh
-	ln -s ~/bin/netmill-0/netmill ~/bin/netmill
-	```
-
-
-## Usage
-
-### HTTP server
-
-```sh
-# Run HTTP file-server on port `8080` with the current directory as root
-netmill http  listen 8080  www .
-
-# Run HTTP proxy-server
-netmill http  listen 127.0.0.1:8080  proxy
-```
-
-### HTTP client
-
-```sh
-# Download a file over HTTP
-netmill url https://host.com/path/file
-```
-
-### DNS server
+Examples:
 
 * (Optional) Use netmill as default DNS server on Fedora:
 
@@ -204,7 +184,41 @@ sudo systemctl status netmill
 sudo systemctl enable netmill
 ```
 
-### Certificate generator
+
+## Ingress Firewall
+
+Blocks certain type of incoming traffic and redirects raw packets to userspace.
+The underlying technology is Linux XDP, so this means that the redirected packets don't reach the kernel network stack.
+
+```sh
+# Redirect all incoming TCP:443
+netmill firewall interface eth1 \
+	eth_proto IP \
+	ip_proto TCP \
+	l4_dst_port 443
+
+# Redirect all incoming ICMP
+netmill firewall interface eth1 \
+	eth_proto IP \
+	ip_proto ICMP
+```
+
+
+## XDP ping
+
+ping utility using XDP/Linux.
+Hardware addresses must be manually specified and must be real.
+
+```sh
+netmill ping interface eth1 \
+	hwsrc 11:11:11:11:11:11 \
+	hwdst 22:22:22:22:22:22 \
+	src 10.1.1.1 \
+	dst 10.1.1.2
+```
+
+
+## Certificate Generator
 
 ```sh
 # Generate RSA key and X509 certificate PEM file
@@ -214,6 +228,29 @@ netmill cert \
  until "2030-01-01 00:00:00" \
  output cert.pem
 ```
+
+
+## Build
+
+[Build Instructions](BUILDING.md)
+
+
+## Install
+
+Linux:
+
+* Unpack the archive somewhere, e.g. to `~/bin`:
+
+	```sh
+	mkdir -p ~/bin
+	tar xf netmill-VERSION-linux-amd64.tar.zst -C ~/bin
+	```
+
+* Create a symbolic link:
+
+	```sh
+	ln -s ~/bin/netmill-0/netmill ~/bin/netmill
+	```
 
 
 ## HTTP server as a library
@@ -255,3 +292,8 @@ nml_http_server_run(s);
 ## Homepage
 
 https://github.com/stsaz/netmill
+
+
+## License
+
+BSD 2-Clause

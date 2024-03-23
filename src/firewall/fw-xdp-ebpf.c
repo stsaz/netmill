@@ -1,10 +1,10 @@
 /** netmill: firewall: eBPF filter (kernel)
 2024, Simon Zolin */
 
-#include <linux/types.h>
 #include <firewall/data.h>
 #include <linux/bpf.h>
 #include <bpf/bpf_helpers.h>
+#include <bpf/bpf_endian.h>
 #include <linux/if_ether.h>
 #include <linux/in.h>
 #include <linux/ip.h>
@@ -21,9 +21,21 @@
 
 BPF_MAP_DECLARE(nml_fw_rule_map, BPF_MAP_TYPE_HASH, struct nml_fw_rule_key, struct nml_fw_rule, 16);
 BPF_MAP_DECLARE(nml_fw_stats_map, BPF_MAP_TYPE_PERCPU_ARRAY, __u32, struct nml_fw_stats, 1);
+BPF_MAP_DECLARE(nml_fw_xsk_map, BPF_MAP_TYPE_XSKMAP, __u32, __u32, 1);
 
-#define htons(x) ((__be16)___constant_swab16((x)))
-
+/** This program redirects matched traffic to AF_XDP socket.
+Algorithm:
+. Drop if not enough data in packet
+. Match by Ethernet type + IPv4/IPv6 protocol/next-header + UDP/TCP ports
+	or by Ethernet type + IPv4/IPv6 protocol/next-header
+		(e.g. match all UDP)
+	or by Ethernet type
+		(e.g. match all IPv4)
+. Match by Ethernet type + IPv4/IPv6 protocol/next-header + UDP/TCP destination port
+. If match:
+	. Redirect to AF_XDP socket
+. Pass to kernel
+*/
 SEC("prog")
 int nml_fw(struct xdp_md *ctx)
 {
@@ -31,29 +43,29 @@ int nml_fw(struct xdp_md *ctx)
 	const struct ethhdr *eth = (void*)(long)ctx->data;
 	const void *l4;
 	if ((void*)(eth + 1) > data_end)
-		goto drop_invalid; // incomplete Ethernet header
+		goto invalid; // no Ethernet header
 
 	struct nml_fw_rule_key k;
 	*(__u16*)k.eth_proto = eth->h_proto;
 	k.reserved = 0;
 
-	if (eth->h_proto == htons(ETH_P_IP)) {
+	if (eth->h_proto == bpf_htons(ETH_P_IP)) {
 
 		const struct iphdr *ip = (void*)(eth + 1);
 		if ((void*)(ip + 1) > data_end)
-			goto drop_invalid; // incomplete IPv4 header
+			goto invalid; // no IPv4 header
 
 		l4 = (char*)ip + ip->ihl * 4;
 		if (l4 > data_end)
-			goto drop_invalid; // incomplete IPv4 header
+			goto invalid; // incomplete IPv4 header
 
 		k.ip_proto = ip->protocol;
 
-	} else if (eth->h_proto == htons(ETH_P_IPV6)) {
+	} else if (eth->h_proto == bpf_htons(ETH_P_IPV6)) {
 
 		const struct ipv6hdr *ip6 = (void*)(eth + 1);
 		if ((void*)(ip6 + 1) > data_end)
-			goto drop_invalid; // incomplete IPv6 header
+			goto invalid; // no IPv6 header
 
 		l4 = ip6 + 1;
 		k.ip_proto = ip6->nexthdr;
@@ -71,7 +83,7 @@ int nml_fw(struct xdp_md *ctx)
 		dst[2]
 		*/
 		if (l4 + 2 + 2 > data_end)
-			goto drop_invalid; // incomplete UDP/TCP header
+			goto invalid; // no UDP/TCP ports
 
 		*(__u16*)k.l4_src_port = *(__u16*)l4;
 		*(__u16*)k.l4_dst_port = *(__u16*)(l4 + 2);
@@ -83,43 +95,36 @@ int nml_fw(struct xdp_md *ctx)
 
 	struct nml_fw_rule *rule;
 	if ((rule = bpf_map_lookup_elem(&nml_fw_rule_map, &k)))
-		goto drop_by_rule;
+		goto match;
 
 	if (k.ip_proto == IPPROTO_UDP
 		|| k.ip_proto == IPPROTO_TCP) {
 
-		// Match by L4 source port only
-		__u32 tmp = *(__u16*)k.l4_dst_port;
-		*(__u16*)k.l4_dst_port = 0;
-		if ((rule = bpf_map_lookup_elem(&nml_fw_rule_map, &k)))
-			goto drop_by_rule;
-		*(__u16*)k.l4_dst_port = tmp;
-
 		// Match by L4 destination port only
 		*(__u16*)k.l4_src_port = 0;
 		if ((rule = bpf_map_lookup_elem(&nml_fw_rule_map, &k)))
-			goto drop_by_rule;
+			goto match;
 	}
 
 	return XDP_PASS;
 
-drop_invalid:
+invalid:
 	{
 	__u32 key = 0;
 	struct nml_fw_stats *stats = bpf_map_lookup_elem(&nml_fw_stats_map, &key);
 	if (stats)
-		stats->drop_invalid++;
+		stats->invalid++;
 	return XDP_DROP;
 	}
 
-drop_by_rule:
+match:
 	{
 	__u32 key = 0;
 	struct nml_fw_stats *stats = bpf_map_lookup_elem(&nml_fw_stats_map, &key);
 	if (stats)
-		stats->drop_by_rule++;
-	return XDP_DROP;
+		stats->matched++;
 	}
+    return bpf_redirect_map(&nml_fw_xsk_map, ctx->rx_queue_index, 0);
 }
 
 char _license[] SEC("license") = "GPL";

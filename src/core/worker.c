@@ -9,10 +9,10 @@
 #include <util/kq-kcq.h>
 #include <ffsys/perf.h>
 
-#define nml_wrk_syserrlog(w, ...) \
+#define w_syserrlog(w, ...) \
 	w->conf.log(w->conf.log_obj, NML_LOG_SYSERR, w->conf.log_ctx, NULL, __VA_ARGS__)
 
-#define nml_wrk_dbglog(w, ...) \
+#define w_dbglog(w, ...) \
 do { \
 	if (w->conf.log_level >= NML_LOG_DEBUG) \
 		w->conf.log(w->conf.log_obj, NML_LOG_DEBUG, w->conf.log_ctx, NULL, __VA_ARGS__); \
@@ -79,12 +79,12 @@ static void nml_wrk_timer(void *p, nml_timer *tmr, int interval_msec, fftimerque
 	struct nml_wrk *w = p;
 	if (!interval_msec) {
 		if (fftimerqueue_remove(&w->timer_q, tmr))
-			nml_wrk_dbglog(w, "timer remove: %p", tmr);
+			w_dbglog(w, "timer remove: %p", tmr);
 		return;
 	}
 
 	fftimerqueue_add(&w->timer_q, tmr, w->timer_now_ms, interval_msec, func, param);
-	nml_wrk_dbglog(w, "timer add: %p %d", tmr, interval_msec);
+	w_dbglog(w, "timer add: %p %d", tmr, interval_msec);
 }
 
 static struct zzkevent* nml_wrk_kev_new(void *p)
@@ -124,16 +124,16 @@ static void nml_wrk_task(void *p, nml_task *t, uint flags)
 
 	if (!flags) {
 		fftaskqueue_del(&w->tq, t);
-		nml_wrk_dbglog(w, "task remove: %p", t);
+		w_dbglog(w, "task remove: %p", t);
 		return;
 	}
 
 	if (zzkq_tq_post(&w->kq_tq, t))
-		nml_wrk_syserrlog(w, "zzkq_tq_post");
-	nml_wrk_dbglog(w, "task add: %p", t);
+		w_syserrlog(w, "zzkq_tq_post");
+	w_dbglog(w, "task add: %p", t);
 }
 
-const nml_core nml_wrk_core_if = {
+static const struct nml_core wrk_core_if = {
 	.kev_new = nml_wrk_kev_new,
 	.kev_free = nml_wrk_kev_free,
 	.kq_attach = nml_wrk_kq_attach,
@@ -144,7 +144,7 @@ const nml_core nml_wrk_core_if = {
 };
 
 
-void nml_wrk_free(struct nml_wrk *w)
+static void nml_worker_destroy(struct nml_wrk *w)
 {
 	if (!w) return;
 
@@ -154,15 +154,16 @@ void nml_wrk_free(struct nml_wrk *w)
 	ffmem_free(w);
 }
 
-struct nml_wrk* nml_wrk_new()
+static struct nml_wrk* nml_worker_create(nml_core *core)
 {
 	struct nml_wrk *w = ffmem_new(struct nml_wrk);
 	zzkq_timer_init(&w->kq_timer);
 	zzkqkcq_init(&w->kq_kcq);
+	*core = wrk_core_if;
 	return w;
 }
 
-int nml_wrk_conf(struct nml_wrk *w, struct nml_wrk_conf *conf)
+static int nml_worker_conf(struct nml_wrk *w, struct nml_wrk_conf *conf)
 {
 	w->conf = *conf;
 	time_update(w);
@@ -193,12 +194,20 @@ int nml_wrk_conf(struct nml_wrk *w, struct nml_wrk_conf *conf)
 	return 0;
 }
 
-int nml_wrk_run(struct nml_wrk *w)
+static int nml_worker_run(struct nml_wrk *w)
 {
 	return zzkq_run(&w->kq);
 }
 
-void nml_wrk_stop(struct nml_wrk *w)
+static void nml_worker_stop(struct nml_wrk *w)
 {
 	zzkq_stop(&w->kq);
 }
+
+const struct nml_worker_if nml_worker_interface = {
+	nml_worker_create,
+	nml_worker_destroy,
+	nml_worker_conf,
+	nml_worker_run,
+	nml_worker_stop,
+};

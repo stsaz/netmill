@@ -112,25 +112,35 @@ LIB_DIR_ARM64 := $(NML_DIR)/android/netmill/libs/arm64-v8a
 LIB_DIR_ARM := $(NML_DIR)/android/netmill/libs/armeabi-v7a
 
 lib-amd64:
-	$(MKDIR) obj-amd64 $(LIB_DIR_AMD64)
-	$(SUBMAKE) CPU=amd64 A_API=26 $(LIB_DIR_AMD64)/libnetmill.so.debug
+	$(MKDIR) ../_android-amd64 $(LIB_DIR_AMD64)
+	$(MAKE) libs \
+		-C ../_android-amd64 \
+		-f $(NML_DIR)/android/Makefile \
+		-I $(NML_DIR)/android \
+		CPU=amd64
 
 lib-arm64:
-	$(MKDIR) obj-arm64 $(LIB_DIR_ARM64)
-	$(SUBMAKE) CPU=arm64 A_API=26 $(LIB_DIR_ARM64)/libnetmill.so.debug
+	$(MKDIR) ../_android-arm64 $(LIB_DIR_ARM64)
+	$(MAKE) libs \
+		-C ../_android-arm64 \
+		-f $(NML_DIR)/android/Makefile \
+		-I $(NML_DIR)/android \
+		CPU=arm64
+
+libs: $(LIB_DIR_AMD64)/libnetmill.so.debug
 
 clean-lib:
-	$(RM) obj-arm64 obj-amd64 $(LIB_DIR_AMD64) $(LIB_DIR_ARM64)
+	$(RM) ../_android-arm64 ../_android-amd64 $(LIB_DIR_AMD64) $(LIB_DIR_ARM64)
 
-OBJ_DIR := obj-$(CPU)
 LIB_DIR := $(LIB_DIR_AMD64)
 ifeq "$(CPU)" "arm64"
 	LIB_DIR := $(LIB_DIR_ARM64)
 else ifeq "$(CPU)" "arm"
 	LIB_DIR := $(LIB_DIR_ARM)
 endif
-CFLAGS += -Wall -Wextra -Wno-unused-parameter -Wno-sign-compare
-CFLAGS += -DFFBASE_HAVE_FFERR_STR
+CFLAGS += -std=c99
+CFLAGS += -Wall -Wextra -Wno-unused-parameter -Wno-sign-compare -Wno-multichar
+CFLAGS += -DNML_STATIC_LINKING -DFFBASE_HAVE_FFERR_STR
 CFLAGS += -I $(NML_DIR)/src -I $(FFSYS_DIR) -I $(FFBASE_DIR)
 ifeq "$(DEBUG)" "1"
 	CFLAGS += -g
@@ -142,29 +152,27 @@ LINKFLAGS += \
 	-llog
 
 $(LIB_DIR)/libnetmill.so: \
-		$(OBJ_DIR)/netmill-jni.o \
-		$(OBJ_DIR)/server.o \
-		$(OBJ_DIR)/client.o \
-		$(OBJ_DIR)/oclient.o \
-		$(OBJ_DIR)/filters.o \
-		$(OBJ_DIR)/proxy.o \
-		$(OBJ_DIR)/proxy-filters.o \
-		$(OBJ_DIR)/tcp-listener.o \
-		$(OBJ_DIR)/nif.o
+		netmill-jni.o \
+		core-tcp-listener.o \
+		http-sv-server.o \
+		http-sv-client.o \
+		http-sv-chain.o \
+		http-sv-proxy.o \
+		http-sv-proxy-chain.o \
+		http-cl-client.o \
+		http-cl-components.o \
+		nif.o
 	$(LINK) -shared $(LINKFLAGS) $+ -o $@
 
-DEPS := \
-	$(wildcard $(NML_DIR)/src/*.h) \
-	$(wildcard $(NML_DIR)/src/http-server/*.h) \
-	$(wildcard $(NML_DIR)/src/http-client/*.h) \
-	$(wildcard $(NML_DIR)/src/jni/*.h)
-$(OBJ_DIR)/%.o: $(NML_DIR)/src/%.c $(DEPS)
+%.o: $(NML_DIR)/src/%.c $(DEPS)
 	$(C) $(CFLAGS) $< -o $@
-$(OBJ_DIR)/%.o: $(NML_DIR)/src/http-server/%.c $(DEPS)
+core-%.o: $(NML_DIR)/src/core/%.c $(DEPS)
 	$(C) $(CFLAGS) $< -o $@
-$(OBJ_DIR)/%.o: $(NML_DIR)/src/http-client/%.c $(DEPS)
+http-sv-%.o: $(NML_DIR)/src/http-server/%.c $(DEPS)
 	$(C) $(CFLAGS) $< -o $@
-$(OBJ_DIR)/%.o: $(NML_DIR)/src/jni/%.c $(DEPS)
+http-cl-%.o: $(NML_DIR)/src/http-client/%.c $(DEPS)
+	$(C) $(CFLAGS) $< -o $@
+%.o: $(NML_DIR)/src/jni/%.c $(DEPS)
 	$(C) $(CFLAGS) $< -o $@
 
 OBJCOPY := $(C_DIR)/llvm-objcopy

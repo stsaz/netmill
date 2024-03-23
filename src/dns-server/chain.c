@@ -10,6 +10,14 @@
 #include <dns-server/response.h>
 #include <dns-server/reply.h>
 
+const nml_dns_component* nml_dns_server_hosts_chain[] = {
+	&nml_dns_request,
+	&nml_dns_hosts,
+	&nml_dns_response,
+	&nml_dns_reply,
+	NULL
+};
+
 const nml_dns_component* nml_dns_server_chain[] = {
 	&nml_dns_request,
 	&nml_dns_hosts,

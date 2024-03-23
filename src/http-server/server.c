@@ -33,10 +33,9 @@ do { \
 		s->conf.log(s->conf.log_obj, NML_LOG_DEBUG, "http-sv", NULL, __VA_ARGS__); \
 } while (0)
 
-nml_http_server* nml_http_server_new()
+nml_http_server* nml_http_server_create()
 {
 	nml_http_server *s = ffmem_new(struct nml_http_server);
-	s->wrk = nml_wrk_new();
 	return s;
 }
 
@@ -44,8 +43,8 @@ void nml_http_server_free(nml_http_server *s)
 {
 	if (!s) return;
 
-	nml_wrk_free(s->wrk);
-	nml_tcp_listener_free(s->ls);
+	s->conf.server.wif->free(s->wrk);
+	s->conf.server.lsif->free(s->ls);
 	ffmem_free(s);
 }
 
@@ -63,7 +62,7 @@ static void sv_on_complete(void *w, ffsock sk, struct zzkevent *kev)
 	nml_http_server *s = ((struct nml_wrk_conf*)w)->opaque;
 	ffsock_close(sk);
 	if (kev)
-		nml_wrk_core_if.kev_free(s->wrk, kev);
+		s->conf.core.kev_free(s->wrk, kev);
 }
 
 static void sv_log(void *opaque, ffuint level, const char *ctx, const char *id, const char *format, ...)
@@ -76,7 +75,7 @@ static void sv_conf_init(struct nml_http_server_conf *conf)
 	conf->log_level = NML_LOG_INFO;
 	conf->log = sv_log;
 
-	conf->core = nml_wrk_core_if;
+	conf->core = conf->core;
 
 	static struct nml_address a[2];
 	a[0].port = 80;
@@ -114,8 +113,13 @@ int nml_http_server_conf(nml_http_server *s, struct nml_http_server_conf *conf)
 		return 0;
 	}
 
+	NML_ASSERT(conf->chain);
+	NML_ASSERT(conf->server.wif);
+	NML_ASSERT(conf->server.lsif);
+
 	s->conf = *conf;
 
+	s->wrk = s->conf.server.wif->create(&s->conf.core);
 	struct nml_wrk_conf wc = {
 		.opaque = s,
 
@@ -123,6 +127,7 @@ int nml_http_server_conf(nml_http_server *s, struct nml_http_server_conf *conf)
 		.log = conf->log,
 		.log_obj = conf->log_obj,
 		.log_ctx = "http-sv",
+		.log_date_buffer = conf->log_date_buffer,
 
 		.kcq_sq = conf->kcq_sq,
 		.kcq_sq_sem = conf->kcq_sq_sem,
@@ -131,14 +136,14 @@ int nml_http_server_conf(nml_http_server *s, struct nml_http_server_conf *conf)
 		.events_num = conf->server.events_num,
 		.max_connections = conf->server.max_connections,
 	};
-	if (nml_wrk_conf(s->wrk, &wc))
+	if (s->conf.server.wif->conf(s->wrk, &wc))
 		return -1;
 
 	s->conf.on_complete = sv_on_complete;
 	s->conf.boss = s->wrk;
 
 	struct nml_tcp_listener_conf lc;
-	nml_tcp_listener_conf(NULL, &lc);
+	s->conf.server.lsif->conf(NULL, &lc);
 
 	lc.log_level = s->conf.log_level;
 	lc.log = s->conf.log;
@@ -154,20 +159,28 @@ int nml_http_server_conf(nml_http_server *s, struct nml_http_server_conf *conf)
 	lc.reuse_port = s->conf.server.reuse_port;
 	lc.v6_only = s->conf.server.v6_only;
 
-	if (!(s->ls = nml_tcp_listener_new()))
+	if (!(s->ls = s->conf.server.lsif->create()))
 		return -1;
-	return nml_tcp_listener_conf(s->ls, &lc);
+	return s->conf.server.lsif->conf(s->ls, &lc);
 }
 
 int nml_http_server_run(nml_http_server *s)
 {
-	if (nml_tcp_listener_run(s->ls))
+	if (s->conf.server.lsif->run(s->ls))
 		return -1;
 
-	return nml_wrk_run(s->wrk);
+	return s->conf.server.wif->run(s->wrk);
 }
 
 void nml_http_server_stop(nml_http_server *s)
 {
-	nml_wrk_stop(s->wrk);
+	s->conf.server.wif->stop(s->wrk);
 }
+
+const struct nml_http_server_if nml_http_server_interface = {
+	nml_http_server_create,
+	nml_http_server_free,
+	nml_http_server_conf,
+	nml_http_server_run,
+	nml_http_server_stop,
+};

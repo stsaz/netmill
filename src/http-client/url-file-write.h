@@ -1,6 +1,7 @@
 /** netmill: executor: url: process command-line arguments
 2023, Simon Zolin */
 
+#include <ffsys/std.h>
 #include <http-client/client.h>
 
 static int filew_open(nml_http_client *c)

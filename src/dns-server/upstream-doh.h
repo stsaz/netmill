@@ -25,7 +25,8 @@ static void doh_close(nml_dns_sv_conn *c)
 {
 	struct nml_doh *d = c->doh;
 	c->doh = NULL;
-	nml_http_client_free(d->htcl);  d->htcl = NULL;
+	d->dns_conf->upstreams.hcif->free(d->htcl);
+	d->htcl = NULL;
 	dns_msg_destroy(&c->resp);
 	ffvec_free(&c->respbuf);
 	c->conf->core.task(c->conf->boss, &d->task, 0);
@@ -54,13 +55,13 @@ static ffstr doh_req_path(struct nml_doh *d)
 	return req;
 }
 
-extern const nml_http_cl_component *http_cl_doh_chain[];
-
 static void* doh_http_cl_conf(struct upstream_doh *u, struct nml_doh *d)
 {
 	nml_dns_sv_conn *c = d->dns_conn;
+	NML_ASSERT(c->conf->upstreams.hcif);
+	NML_ASSERT(c->conf->upstreams.doh_ssl_ctx);
 	struct nml_http_client_conf *cc = &d->conf;
-	nml_http_client_conf(NULL, cc);
+	d->dns_conf->upstreams.hcif->conf(NULL, cc);
 	cc->opaque = d;
 
 	cc->log_level = c->conf->log_level;
@@ -75,16 +76,16 @@ static void* doh_http_cl_conf(struct upstream_doh *u, struct nml_doh *d)
 	cc->core = c->conf->core;
 	cc->boss = c->conf->boss;
 
-	NML_ASSERT(c->conf->upstreams.doh_ssl_ctx);
 	cc->ssl_ctx = c->conf->upstreams.doh_ssl_ctx;
 
 	cc->connect.cache = c->conf->upstreams.doh_connection_cache;
+	cc->connect.cif = c->conf->upstreams.cif;
 
 	cc->host = FFSTR_Z(u->host);
 	cc->path = doh_req_path(d);
 	if (!cc->path.len)
 		return NULL;
-	cc->chain = http_cl_doh_chain;
+	cc->chain = c->conf->upstreams.doh_chain;
 	return cc;
 }
 
@@ -129,9 +130,9 @@ static int doh_open(nml_dns_sv_conn *c)
 	struct nml_http_client_conf *cc = doh_http_cl_conf(u, d);
 	if (!cc)
 		goto err;
-	if (!(d->htcl = nml_http_client_new()))
+	if (!(d->htcl = d->dns_conf->upstreams.hcif->create()))
 		goto err;
-	if (nml_http_client_conf(d->htcl, cc))
+	if (d->dns_conf->upstreams.hcif->conf(d->htcl, cc))
 		goto err;
 
 	if (ffint_cmpxchg(&u->busy, 0, 1) != 0) {
@@ -249,7 +250,7 @@ err:
 		return NMLF_DONE;
 	}
 
-	nml_http_client_run(d->htcl);
+	d->dns_conf->upstreams.hcif->run(d->htcl);
 	return NMLF_ASYNC;
 }
 
