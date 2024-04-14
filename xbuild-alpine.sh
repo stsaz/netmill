@@ -16,7 +16,11 @@ RUN apk add \
  build-base \
  linux-headers
 RUN apk add \
+ clang llvm
+RUN apk add \
  openssl openssl-dev
+RUN apk add \
+ elfutils-dev
 EOF
 
 	# Create builder container
@@ -34,6 +38,9 @@ set -xe
 make -j8 zlib \
  -C ../ffpack \
  BINDIR=_linux-musl-amd64
+
+make -j8 bpf xdp \
+ -C 3pt
 
 mkdir -p _linux-musl-amd64
 make -j8 \
