@@ -76,6 +76,7 @@ static void* doh_http_cl_conf(struct upstream_doh *u, struct nml_doh *d)
 	hcc->core = c->conf->core;
 	hcc->boss = c->conf->boss;
 
+	hcc->slif = c->conf->upstreams.slif;
 	hcc->ssl_ctx = c->conf->upstreams.doh_ssl_ctx;
 
 	hcc->connect.cache = c->conf->upstreams.doh_connection_cache;

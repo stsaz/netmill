@@ -664,6 +664,7 @@ struct nml_dns_server_conf {
 		uint64	out_reqs, in_msgs, in_data, out_data; // stats
 
 		const nml_http_client_if *hcif; // (Required for DoH)
+		const nml_ssl_if *slif; // (Required for DoH)
 		struct nml_ssl_ctx *doh_ssl_ctx; // (Required for DoH) DoH client SSL context
 		const nml_cache_if *cif;
 		nml_cache_ctx *doh_connection_cache; // DoH client connection cache

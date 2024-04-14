@@ -47,6 +47,7 @@ static void hc_conn_cache_close(nml_http_client *c)
 	if (!data.len)
 		goto fail;
 	struct http_cl_conn_cache_ent *ce = (void*)data.ptr;
+	ffmem_zero_obj(ce);
 	ffmem_copy(ce->name, c->connect.cache_name, sizeof(c->connect.cache_name));
 	ce->sk = c->sk;
 	if (c->conf->slif)

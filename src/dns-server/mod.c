@@ -222,7 +222,7 @@ static struct nml_ssl_ctx* dns_sv_ssl_prepare(struct dns_sv_exe *dx)
 	struct ffssl_ctx_conf *scc = ffmem_new(struct ffssl_ctx_conf);
 	sc->ctx_conf = scc;
 
-	const nml_ssl_if *sif = exe->provide("ssl.ssl");
+	const nml_ssl_if *slif = dx->sv.upstreams.slif;
 
 	if (!dx->cert_key_file) {
 		dx->cert_key_file = dx->cert_key_file_buf = exe->path("client.pem");
@@ -234,7 +234,7 @@ static struct nml_ssl_ctx* dns_sv_ssl_prepare(struct dns_sv_exe *dx)
 				.from_time = now.sec,
 				.until_time = now.sec + 10*365*24*60*60,
 			};
-			sif->cert_pem_create(dx->cert_key_file, 2048, &ci);
+			slif->cert_pem_create(dx->cert_key_file, 2048, &ci);
 			DX_INFO("generated certificate file: %s", dx->cert_key_file);
 		}
 	}
@@ -247,7 +247,7 @@ static struct nml_ssl_ctx* dns_sv_ssl_prepare(struct dns_sv_exe *dx)
 	sc->log_obj = NULL;
 	sc->log = exe->log;
 
-	if (sif->init(sc))
+	if (slif->init(sc))
 		return NULL;
 
 	return sc;
@@ -290,6 +290,7 @@ static int dns_setup(struct dns_sv_exe *dx)
 		sc->chain = nml_dns_server_chain;
 
 	if (dx->have_doh) {
+		sc->upstreams.slif = exe->provide("ssl.ssl");
 		if (!(sc->upstreams.doh_ssl_ctx = dns_sv_ssl_prepare(dx)))
 			return -1;
 

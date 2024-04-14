@@ -114,6 +114,7 @@ ffstr nml_cache_reserve(nml_cache_ctx *cx, size_t data_len)
 	struct cache_entry *ce = ffmem_alloc(sizeof(struct cache_entry) + data_len);
 	if (!ce)
 		return FFSTR_Z("");
+	ffmem_zero_obj(ce);
 	ce->data_cap = data_len;
 	ffstr data = FFSTR_INITN(ce->data, data_len);
 	return data;
