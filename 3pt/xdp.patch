@@ -1,0 +1,17 @@
+diff --git a/libxdp.c b/libxdp.c
+index 9127454..aa82f5c 100644
+--- a/libxdp.c
++++ b/libxdp.c
+@@ -130,9 +130,9 @@ extern const char _binary_xsk_def_xdp_prog_5_3_o_start;
+ extern const char _binary_xsk_def_xdp_prog_5_3_o_end;
+ 
+ static struct xdp_embedded_obj embedded_objs[] = {
+-	{"xdp-dispatcher.o", &_binary_xdp_dispatcher_o_start, &_binary_xdp_dispatcher_o_end},
+-	{"xsk_def_xdp_prog.o", &_binary_xsk_def_xdp_prog_o_start, &_binary_xsk_def_xdp_prog_o_end},
+-	{"xsk_def_xdp_prog_5.3.o", &_binary_xsk_def_xdp_prog_5_3_o_start, &_binary_xsk_def_xdp_prog_5_3_o_end},
++	// {"xdp-dispatcher.o", &_binary_xdp_dispatcher_o_start, &_binary_xdp_dispatcher_o_end},
++	// {"xsk_def_xdp_prog.o", &_binary_xsk_def_xdp_prog_o_start, &_binary_xsk_def_xdp_prog_o_end},
++	// {"xsk_def_xdp_prog_5.3.o", &_binary_xsk_def_xdp_prog_5_3_o_start, &_binary_xsk_def_xdp_prog_5_3_o_end},
+ 	{},
+ };
+ static struct xdp_program *xdp_program__find_embedded(const char *filename,

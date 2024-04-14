@@ -31,12 +31,17 @@ fi
 cat >build_linux.sh <<EOF
 set -xe
 
+make -j8 zlib \
+ -C ../ffpack \
+ BINDIR=_linux-musl-amd64
+
 mkdir -p _linux-musl-amd64
 make -j8 \
  -C _linux-musl-amd64 \
  -f ../Makefile \
  ROOT_DIR=../.. \
  CFLAGS_USER=-DFF_MUSL \
+ BINDIR=_linux-musl-amd64 \
  $@
 EOF
 

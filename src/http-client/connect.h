@@ -61,7 +61,7 @@ static int hc_connect(nml_http_client *c)
 			hc_timer(c, &c->connect.timer, -(int)c->conf->connect_timeout_msec, hc_connect_expired, c);
 
 			char buf[FFIP6_STRLEN];
-			uint port;
+			uint port = 0;
 			ffslice ip = ffsockaddr_ip_port(&c->connect.saddr, &port);
 			ffip6 ip6;
 			if (ip.len == 4)
