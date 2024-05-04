@@ -56,7 +56,7 @@ enum FFSSL_E {
 	FFSSL_ECTX_SET_CIPHERSUITES,
 	FFSSL_EUSECERT,
 	FFSSL_EUSEPKEY,
-	FFSSL_ECTX_VERIFY_LOC,
+	FFSSL_ECTX_LOAD_VERIFY,
 	FFSSL_ELOADCA,
 	FFSSL_ESETTLSSRVNAME,
 
@@ -84,7 +84,7 @@ static const char *const ffssl_funcstr[] = {
 	"SSL_CTX_set_ciphersuites",
 	"SSL_CTX_use_certificate",
 	"SSL_CTX_use_PrivateKey",
-	"SSL_CTX_load_verify_locations",
+	"SSL_CTX_load_verify*",
 	"SSL_load_client_CA_file",
 	"SSL_CTX_set_tlsext_servername*",
 
@@ -258,6 +258,16 @@ static int _ffssl_ctx_tls_srvname_set(SSL_CTX *ctx, ffssl_tls_srvname_cb func)
 	return 0;
 }
 
+static int _ffssl_verify_cb(int preverify_ok, X509_STORE_CTX *x509ctx)
+{
+	SSL *ssl = X509_STORE_CTX_get_ex_data(x509ctx, SSL_get_ex_data_X509_STORE_CTX_idx());
+	void *udata = SSL_get_ex_data(ssl, g->conn_idx);
+	ffssl_verify_cb verify = SSL_CTX_get_ex_data(SSL_get_SSL_CTX(ssl), g->verify_cb_idx);
+	if (verify != NULL)
+		return verify(preverify_ok, x509ctx, udata);
+	return preverify_ok;
+}
+
 int ffssl_ctx_conf(SSL_CTX *ctx, const struct ffssl_ctx_conf *o)
 {
 	int r;
@@ -288,32 +298,32 @@ int ffssl_ctx_conf(SSL_CTX *ctx, const struct ffssl_ctx_conf *o)
 
 	_ffssl_ctx_proto_allow(ctx, o->allowed_protocols);
 
-	return 0;
-}
+	if (o->verify_func != NULL) {
+		SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, _ffssl_verify_cb);
+		if (!SSL_CTX_set_ex_data(ctx, g->verify_cb_idx, o->verify_func))
+			return FFSSL_ECTX_SETDATA;
+	}
 
-static int _ffssl_verify_cb(int preverify_ok, X509_STORE_CTX *x509ctx)
-{
-	SSL *ssl = X509_STORE_CTX_get_ex_data(x509ctx, SSL_get_ex_data_X509_STORE_CTX_idx());
-	void *udata = SSL_get_ex_data(ssl, g->conn_idx);
-	ffssl_verify_cb verify = SSL_CTX_get_ex_data(SSL_get_SSL_CTX(ssl), g->verify_cb_idx);
-	return verify(preverify_ok, x509ctx, udata);
-}
+	if (o->verify_depth != 0 && o->verify_depth != ~0U)
+		SSL_CTX_set_verify_depth(ctx, o->verify_depth);
 
-int ffssl_ctx_ca(SSL_CTX *ctx, ffssl_verify_cb func, uint verify_depth, const char *fn)
-{
-	SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, &_ffssl_verify_cb);
-	SSL_CTX_set_verify_depth(ctx, verify_depth);
+	if (o->CA_file != NULL && !SSL_CTX_load_verify_file(ctx, o->CA_file))
+		return FFSSL_ECTX_LOAD_VERIFY;
 
-	if (!SSL_CTX_set_ex_data(ctx, g->verify_cb_idx, func))
-		return FFSSL_ECTX_SETDATA;
+	if (o->CA_path != NULL && !SSL_CTX_load_verify_dir(ctx, o->CA_path))
+		return FFSSL_ECTX_LOAD_VERIFY;
 
-	if (1 != SSL_CTX_load_verify_locations(ctx, fn, NULL))
-		return FFSSL_ECTX_VERIFY_LOC;
+	if (o->verify_depth != 0 && o->CA_file == NULL && o->CA_path == NULL
+		&& !SSL_CTX_set_default_verify_paths(ctx))
+		return FFSSL_ECTX_LOAD_VERIFY;
 
-	STACK_OF(X509_NAME) *names;
-	if (NULL == (names = SSL_load_client_CA_file(fn)))
-		return FFSSL_ELOADCA;
-	SSL_CTX_set_client_CA_list(ctx, names);
+	if (o->client_CA_file != NULL) {
+		STACK_OF(X509_NAME) *names;
+		if (NULL == (names = SSL_load_client_CA_file(o->client_CA_file)))
+			return FFSSL_ELOADCA;
+		SSL_CTX_set_client_CA_list(ctx, names);
+	}
+
 	return 0;
 }
 

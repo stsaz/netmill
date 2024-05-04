@@ -69,6 +69,9 @@ enum FFSSL_PROTO {
 	FFSSL_PROTO_TLS13 = 8,
 };
 
+struct x509_store_ctx_st; // X509_STORE_CTX
+typedef int (*ffssl_verify_cb)(int preverify_ok, struct x509_store_ctx_st *x509ctx, void *udata);
+
 struct ffssl_ctx_conf {
 	char *cert_file;
 	ffstr cert_data;
@@ -77,6 +80,11 @@ struct ffssl_ctx_conf {
 	char *pkey_file; // PEM file name containing private key
 	ffstr pkey_data;
 	ffssl_key *pkey;
+
+	ffssl_verify_cb	verify_func;
+	uint			verify_depth; // -1: default
+	const char		*CA_file, *CA_path; // NULL: load default CA
+	const char		*client_CA_file;
 
 	char *ciphers; // ciphers separated by ':'
 	char *ciphers_tls13; // TLSv1.3 ciphersuites separated by ':'
@@ -89,11 +97,6 @@ struct ffssl_ctx_conf {
 
 /** Configurate ffssl_conn context. */
 FF_EXTERN int ffssl_ctx_conf(ffssl_ctx *ctx, const struct ffssl_ctx_conf *conf);
-
-struct x509_store_ctx_st; // X509_STORE_CTX
-typedef int (*ffssl_verify_cb)(int preverify_ok, struct x509_store_ctx_st *x509ctx, void *udata);
-
-FF_EXTERN int ffssl_ctx_ca(ffssl_ctx *ctx, ffssl_verify_cb func, uint verify_depth, const char *fn);
 
 /**
 size:
