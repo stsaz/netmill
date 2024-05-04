@@ -11,6 +11,8 @@ nml_http_client* nml_http_client_create()
 
 void nml_http_client_free(nml_http_client *c)
 {
+	if (!c) return;
+
 	HC_DEBUG(c, "closing outbound client context");
 	conveyor_close(&c->conveyor, c);
 	c->conf->core.kev_free(c->conf->boss, c->kev);

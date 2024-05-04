@@ -157,6 +157,8 @@ int ffssl_init()
 
 void ffssl_uninit()
 {
+	if (!g) return;
+
 	ERR_free_strings();
 	BIO_meth_free(g->bio_meth);
 	ffmem_free(g);  g = NULL;

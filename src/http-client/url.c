@@ -78,8 +78,14 @@ static int url_fin(struct url_conf *uc)
 	struct httpurl_parts up = {};
 	ffstr in = FFSTR_Z(ux->conf.input);
 	httpurl_split(&up, in);
+	if (!up.host.len) {
+		UR_ERR("Please specify host name (%S)", &in);
+		return R_BADVAL;
+	}
 	ffstr_set(&ux->conf.hcc.host, up.host.ptr, up.host.len + up.port.len);
 	ffstr_set(&ux->conf.hcc.path, up.path.ptr, in.ptr+in.len - up.path.ptr);
+	if (!up.path.len)
+		ffstr_setz(&ux->conf.hcc.path, "/");
 	ux->conf.https = ffstr_eqz(&up.scheme, "https://");
 	if (ux->conf.proxy) {
 		ffstr hp = FFSTR_Z(ux->conf.proxy), h, p;
@@ -361,7 +367,7 @@ static void url_close(nml_op *op)
 static void url_run(nml_op *op)
 {
 	struct url_ctx *ux = op;
-	url_setup(ux);
+	if (url_setup(ux)) return;
 	url_run3(ux);
 }
 

@@ -22,9 +22,7 @@ struct nml_wrk {
 	struct nml_wrk_conf conf;
 	struct zzkq kq;
 
-	struct ffkcallqueue kcq;
 	struct zzkq_kcq kq_kcq;
-	struct zzkevent kcq_kev;
 
 	fftimerqueue timer_q;
 	struct zzkq_timer kq_timer;

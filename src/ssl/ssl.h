@@ -12,6 +12,7 @@ void nml_ssl_uninit(struct nml_ssl_ctx *ctx)
 	if (!ctx) return;
 
 	ffssl_ctx_free(ctx->ctx);
+	ctx->ctx = NULL;
 	ffssl_uninit();
 }
 

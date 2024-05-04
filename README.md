@@ -6,8 +6,8 @@ netmill - network tools for Linux, Android, Windows.
 You can use it as a standalone app or as a library via C and Java interface.
 Current features:
 
-* HTTP/1.1 Server: SSL, local files, auto-index, virtual space, forward proxy (HTTP and tunelling)
-* HTTP/1.1 Client: SSL
+* HTTP/1.1 Server: SSL, local files, auto-index, virtual space, forward proxy (HTTP and tunelling), gzip
+* HTTP/1.1 Client: SSL, gzip
 * DNS Server: hosts lists, hosts block lists, upstream servers (UDP, DoH), persistent cache
 * X509 Certificate Generator
 * Ingress Firewall (XDP/Linux)
@@ -57,7 +57,6 @@ Limitations:
 * Local files mode:
 	* Doesn't use sendfile()
 	* No caching
-	* No compression
 	* No ETag, If-None-Match, Range
 * Proxy mode:
 	* No request body
