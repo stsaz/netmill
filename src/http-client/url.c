@@ -21,6 +21,7 @@ struct url_conf {
 	char*	method;
 	char*	output;
 	char*	proxy;
+	u_char	cert_trust;
 	u_char	force;
 	u_char	print_headers;
 	uint	https :1;
@@ -117,6 +118,7 @@ OPTIONS:\n\
 \n\
 SSL:\n\
   `-cert` FILE        Set certificate & private-key PEM file\n\
+  `-trust`            Don't validate server certificate\n\
 \n\
 HTTP:\n\
   `-method` STRING    HTTP method (default: GET)\n\
@@ -143,6 +145,7 @@ static const struct ffarg url_args[] = {
 	{ "-output",		'=s',	O(output) },
 	{ "-print_headers",	'1',	O(print_headers) },
 	{ "-proxy",			'=s',	O(proxy) },
+	{ "-trust",			'1',	O(cert_trust) },
 	{ "\0\1",			'S',	url_input },
 	{ "",				'1',	url_fin },
 	{}
@@ -246,6 +249,9 @@ static int ssl_prepare()
 	scc->cert_file = ux->conf.cert_key_file;
 	scc->pkey_file = ux->conf.cert_key_file;
 	// scc->allowed_protocols = FFSSL_PROTO_TLS13;
+
+	if (!ux->conf.cert_trust)
+		scc->verify_depth = ~0U;
 
 	sc->log_level = exe->log_level;
 	sc->log_obj = NULL;

@@ -243,6 +243,8 @@ static struct nml_ssl_ctx* dns_sv_ssl_prepare(struct dns_sv_exe *dx)
 	scc->pkey_file = dx->cert_key_file;
 	scc->allowed_protocols = FFSSL_PROTO_TLS13;
 
+	scc->verify_depth = ~0U;
+
 	sc->log_level = exe->log_level;
 	sc->log_obj = NULL;
 	sc->log = exe->log;

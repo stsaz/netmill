@@ -95,7 +95,7 @@ test_https_local() {
 
 	echo Download via TLS
 	rm -f nmltest/README.md
-	./netmill url "https://127.0.0.1:8080/README.md" -o "nmltest/README.md"
+	./netmill url "https://127.0.0.1:8080/README.md" -trust -o "nmltest/README.md"
 	diff README.md nmltest/README.md
 	rm nmltest/README.md
 
