@@ -29,7 +29,7 @@ static int hc_redir_process(nml_http_client *c)
 	struct httpurl_parts p = {};
 	httpurl_split(&p, FFSTR_Z(c->redirect_location));
 	ffstr_set(&c->conf->host, p.host.ptr, p.host.len + p.port.len);
-	c->conf->path = p.path;
+	ffstr_set(&c->conf->path, p.path.ptr, p.path.len + p.query.len);
 
 	if (!c->conf->proxy_host.len
 		&& p.port.len)
