@@ -13,6 +13,7 @@ static int hc_connect_open(nml_http_client *c)
 
 static void hc_connect_close(nml_http_client *c)
 {
+	hc_timer_stop(c, &c->connect.timer);
 	ffsock_close(c->sk);  c->sk = FFSOCK_NULL;
 }
 

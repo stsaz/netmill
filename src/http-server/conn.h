@@ -53,9 +53,9 @@ struct nml_http_sv_conn {
 	struct nml_http_server_conf *conf;
 
 	uint log_level;
+	char id[12]; // "*ID"
 	void (*log)(void *log_obj, uint level, const char *ctx, const char *id, const char *fmt, ...);
 	void *log_obj;
-	char id[12]; // "*ID"
 
 	struct zzkevent *kev;
 	ffsock sk;
@@ -133,9 +133,9 @@ struct nml_http_sv_conn {
 	struct {
 		ffiovec iov[4];
 		uint iov_n;
+		uint chain_pos;
 		nml_timer timer;
 		uint64 transferred;
-		uint chain_pos;
 	} send;
 
 	struct {

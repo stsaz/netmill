@@ -11,7 +11,9 @@ static int slhc_recv_open(nml_http_client *c)
 }
 
 static void slhc_recv_close(nml_http_client *c)
-{}
+{
+	hc_timer_stop(c, &c->recv.timer);
+}
 
 static void slhc_recv_expired(nml_http_client *c)
 {

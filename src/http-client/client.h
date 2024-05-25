@@ -50,8 +50,8 @@ struct nml_http_client {
 
 	void *log_obj;
 	uint log_level;
-	void (*log)(void *log_obj, uint level, const char *ctx, const char *id, const char *fmt, ...);
 	char id[12];
+	void (*log)(void *log_obj, uint level, const char *ctx, const char *id, const char *fmt, ...);
 	void (*wake)(nml_http_client *c);
 
 	struct zzkevent *kev;
@@ -99,9 +99,9 @@ struct nml_http_client {
 	struct {
 		ffiovec iov[1];
 		uint iov_n;
+		uint filter_index;
 		ffvec buf;
 		uint64 transferred_r, transferred_w;
-		uint filter_index;
 	} io;
 
 	struct {
@@ -111,9 +111,9 @@ struct nml_http_client {
 	struct {
 		ffiovec iov[3];
 		uint iov_n;
+		uint filter_index;
 		nml_timer timer;
 		uint64 transferred;
-		uint filter_index;
 	} send;
 
 	struct {

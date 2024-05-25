@@ -10,6 +10,11 @@ static int slhs_recv_open(nml_http_sv_conn *c)
 	return NMLR_OPEN;
 }
 
+static void slhs_recv_close(nml_http_sv_conn *c)
+{
+	hs_timer_stop(c, &c->recv.timer);
+}
+
 static void slhs_recv_expired(nml_http_sv_conn *c)
 {
 	HS_WARN(c, "receive timeout");
@@ -72,6 +77,6 @@ static int slhs_recv_process(nml_http_sv_conn *c)
 }
 
 const nml_http_sv_component nml_htsv_ssl_recv = {
-	slhs_recv_open, NULL, slhs_recv_process,
+	slhs_recv_open, slhs_recv_close, slhs_recv_process,
 	"ssl-recv"
 };
