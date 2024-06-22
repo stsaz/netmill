@@ -47,6 +47,9 @@ test_http_local() {
 	diff README.md nmltest/README.md
 	rm nmltest/README.md
 
+	echo HEAD method
+	./netmill url "127.0.0.1:8080/README.md" -check -method HEAD -print_headers
+
 	echo Directory auto index
 	./netmill url "127.0.0.1:8080/" -o nmltest/hs-dir.html
 	cat nmltest/hs-dir.html

@@ -1,16 +1,10 @@
 /** netmill: executor: url: write data to file
 2023, Simon Zolin */
 
-#include <ffsys/std.h>
 #include <http-client/client.h>
 
 static int url_filew_open(nml_http_client *c)
 {
-	if (ux->conf.print_headers) {
-		ffstr resp = range16_tostr(&c->response.whole, c->response.base);
-		ffstdout_write(resp.ptr, resp.len);
-	}
-
 	uint f = (ux->conf.force) ? FFFILE_CREATE : FFFILE_CREATENEW;
 	if (FFFILE_NULL == (ux->fd = fffile_open(ux->conf.output, f | FFFILE_WRITEONLY))) {
 		HC_SYSERR(c, "file open: %s", ux->conf.output);

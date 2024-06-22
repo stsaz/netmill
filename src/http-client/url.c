@@ -22,6 +22,7 @@ struct url_conf {
 	char*	output;
 	char*	proxy;
 	u_char	cert_trust;
+	u_char	headers_only;
 	u_char	force;
 	u_char	print_headers;
 	uint	https :1;
@@ -40,6 +41,7 @@ struct url_ctx {
 static struct url_ctx *ux;
 
 #include <http-client/url-file-write.h>
+#include <http-client/url-headers.h>
 
 #define R_DONE  100
 #define R_BADVAL  101
@@ -60,7 +62,7 @@ static int url_fin(struct url_conf *uc)
 		ux->conf.output = ffsz_dupstr(&name);
 	}
 
-	if (!ux->conf.force
+	if ((!ux->conf.force && !ux->conf.headers_only)
 		&& fffile_exists(ux->conf.output)) {
 		UR_ERR("%s: file exists", ux->conf.output);
 		return R_BADVAL;
@@ -125,6 +127,7 @@ HTTP:\n\
   `-max_redirect`     Max redirections (default: 10)\n\
   `-print_headers`    Print HTTP response headers\n\
   `-proxy` STRING     Connect via HTTP proxy\n\
+  `-check`            Exit after headers are received, don't download data\n\
 \n\
 Output:\n\
   `-output` FILE      Set output file name\n\
@@ -138,6 +141,7 @@ Output:\n\
 #define O(m)  (void*)(size_t)FF_OFF(struct url_conf, m)
 static const struct ffarg url_args[] = {
 	{ "-cert",			'=s',	O(cert_key_file) },
+	{ "-check",			'1',	O(headers_only) },
 	{ "-force",			'1',	O(force) },
 	{ "-help",			'1',	url_help },
 	{ "-max_redirect",	'u',	O(max_redirect) },
@@ -177,6 +181,7 @@ static const nml_http_cl_component** url_chain(const nml_exe *exe, uint ssl)
 		{"", &nml_http_cl_send},
 		{"", &nml_http_cl_recv},
 		{"", &nml_http_cl_response},
+		{"", &url_headers},
 		{"", &nml_http_cl_transfer},
 		{"", &nml_http_cl_redir},
 #if 1
@@ -196,6 +201,7 @@ static const nml_http_cl_component** url_chain(const nml_exe *exe, uint ssl)
 		{"ssl.htcl_recv", NULL},
 		{"ssl.htcl_resp", NULL},
 		{"", &nml_http_cl_response},
+		{"", &url_headers},
 		{"", &nml_http_cl_transfer},
 		{"", &nml_http_cl_redir},
 #if 1
