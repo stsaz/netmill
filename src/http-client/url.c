@@ -9,10 +9,10 @@
 extern const nml_exe *exe;
 
 #define UR_ERR(...) \
-	exe->log(NULL, NML_LOG_ERR, "url", NULL, __VA_ARGS__)
+	exe->log(NULL, NML_LOG_ERR, "request", NULL, __VA_ARGS__)
 
 #define UR_INFO(...) \
-	exe->log(NULL, NML_LOG_INFO, "url", NULL, __VA_ARGS__)
+	exe->log(NULL, NML_LOG_INFO, "request", NULL, __VA_ARGS__)
 
 struct url_conf {
 	struct nml_http_client_conf hcc;
@@ -72,7 +72,7 @@ static int url_fin(struct url_conf *uc)
 
 	static const char hdrs[] =
 #if 1
-		"Accept-Encoding: gzip\r\n"
+		"Accept-Encoding: deflate\r\n"
 #endif
 		"User-Agent: netmill\r\n"
 		;
@@ -303,7 +303,7 @@ static int url_setup(struct url_ctx *ux)
 		.log_level = exe->log_level,
 		.log = exe->log,
 		.log_obj = NULL,
-		.log_ctx = "url",
+		.log_ctx = "request",
 		.log_date_buffer = exe->log_date_buffer,
 
 		.events_num = 1,
@@ -389,7 +389,7 @@ static void url_signal(nml_op *op, uint signal)
 	u->wif->stop(u->conf.hcc.boss);
 }
 
-const struct nml_operation_if nml_op_url = {
+const struct nml_operation_if nml_op_request = {
 	url_create,
 	url_close,
 	url_run,

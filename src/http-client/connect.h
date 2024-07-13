@@ -58,24 +58,26 @@ static int hc_connect(nml_http_client *c)
 	int r = ffsock_connect_async(c->sk, &c->connect.saddr, HC_KEV_W(c));
 	hc_timer_stop(c, &c->connect.timer);
 	if (r < 0) {
+		char buf[FFIP6_STRLEN];
+		uint port = 0;
+		ffslice ip = ffsockaddr_ip_port(&c->connect.saddr, &port);
+		ffip6 ip6;
+		if (ip.len == 4)
+			ffip6_v4mapped_set(&ip6, (void*)ip.ptr);
+		else
+			ffmem_copy(&ip6, ip.ptr, 16);
+		size_t n = ffip46_tostr(&ip6, buf, sizeof(buf));
+		ffstr host = (c->conf->proxy_host.len) ? c->conf->proxy_host : c->conf->host;
+
 		if (fferr_last() == FFSOCK_EINPROGRESS) {
 			hc_timer(c, &c->connect.timer, -(int)c->conf->connect_timeout_msec, hc_connect_expired, c);
-
-			char buf[FFIP6_STRLEN];
-			uint port = 0;
-			ffslice ip = ffsockaddr_ip_port(&c->connect.saddr, &port);
-			ffip6 ip6;
-			if (ip.len == 4)
-				ffip6_v4mapped_set(&ip6, (void*)ip.ptr);
-			else
-				ffmem_copy(&ip6, ip.ptr, 16);
-			size_t n = ffip46_tostr(&ip6, buf, sizeof(buf));
 			HC_VERBOSE(c, "connecting to %S (%*s:%u)..."
-				, (c->conf->proxy_host.len) ? &c->conf->proxy_host : &c->conf->host, n, buf, port);
+				, &host, n, buf, port);
 			HC_ASYNC_W(c, hc_connect_complete);
 			return NMLR_ASYNC;
 		}
-		HC_SYSWARN(c, "connect");
+		HC_SYSWARN(c, "connect to %S (%*s:%u)"
+				, &host, n, buf, port);
 		return NMLR_ERR;
 	}
 

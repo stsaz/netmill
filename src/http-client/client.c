@@ -90,14 +90,14 @@ static int hc_conveyor_component_call(nml_http_client *c, uint i)
 	const nml_http_cl_component *f = (nml_http_cl_component*)v->comps[i];
 	int r;
 
-	if (!v->rt[i].opened) {
+	if (!CONVEYOR_OPENED_TEST(v, i)) {
 		HC_EXTRALOG(c, "f#%u '%s': opening", i, f->name);
 		r = f->open(c);
 		(void)nmlf_r_str;
 		HC_EXTRALOG(c, "  f#%u '%s': %s", i, f->name, nmlf_r_str[r]);
 		if (r != NMLR_OPEN)
 			return r;
-		v->rt[i].opened = 1;
+		CONVEYOR_OPENED_SET(v, i);
 	}
 
 	HC_EXTRALOG(c, "f#%u '%s': input:%L", i, f->name, c->input.len);
@@ -118,7 +118,7 @@ void nml_http_client_run(nml_http_client *c)
 	int i = v->cur, r;
 	for (;;) {
 
-		if (v->rt[i].done) {
+		if (CONVEYOR_DONE_TEST(v, i)) {
 			r = (!c->chain_going_back) ? NMLR_FWD : NMLR_BACK;
 			if (r == NMLR_FWD)
 				c->output = c->input;
@@ -131,14 +131,14 @@ void nml_http_client_run(nml_http_client *c)
 			c->output = c->input;
 			// fallthrough
 		case NMLR_DONE:
-			v->rt[i].done = 1;
+			CONVEYOR_DONE_SET(v, i);
 			v->active--;
 			v->empty_data_counter = 0;
 			HC_EXTRALOG(c, "chain: %u", v->active);
 			// fallthrough
 
 		case NMLR_FWD:
-			if (!v->rt[i].done) {
+			if (!CONVEYOR_DONE_TEST(v, i)) {
 				if (!c->output.len) {
 					if (v->empty_data_counter > v->active * 2) {
 						HC_ERR(c, "detected chain processing loop");

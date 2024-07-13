@@ -1,6 +1,8 @@
 /** netmill: executor: logs
 2023, Simon Zolin */
 
+static __thread uint64 thread_id;
+
 void exe_log(void *opaque, uint level, const char *ctx, const char *id, const char *fmt, ...)
 {
 	if (level > x->conf.log_level)
@@ -15,7 +17,13 @@ void exe_log(void *opaque, uint level, const char *ctx, const char *id, const ch
 		|| level == NML_LOG_SYSWARN)
 		flags |= ZZLOG_SYS_ERROR;
 
-	zzlog_printv(&x->log, flags, ctx, id, fmt, va);
+	uint64 tid = thread_id;
+	if (tid == 0) {
+		tid = ffthread_curid();
+		thread_id = tid;
+	}
+
+	zzlog_printv(&x->log, flags, x->log_date, tid, ctx, id, fmt, va);
 	va_end(va);
 }
 

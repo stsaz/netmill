@@ -32,7 +32,9 @@ struct mod {
 struct exe {
 	int exit_code;
 	struct exe_conf conf;
-	struct zzlog log;
+
+	struct zzlog	log;
+	char			log_date[32];
 
 	fflock mods_lock;
 	ffvec mods; // struct mod[]
@@ -123,8 +125,8 @@ Command:\n\
   `http`          Start HTTP server\n\
   `if`            Show network interfaces\n\
   `ping`          XDP ping\n\
+  `req`           Execute HTTP request\n\
   `service`       Install system service\n\
-  `url`           Execute HTTP request\n\
 \n\
 \"netmill COMMAND help\" will print details on each command.\n\
 ");
@@ -348,7 +350,7 @@ static const nml_operation_if* op_provide(const char *op)
 	else if (ffsz_eq(op, "http")) op = "http.http";
 	else if (ffsz_eq(op, "if")) op = "if.if";
 	else if (ffsz_eq(op, "ping")) op = "firewall.ping";
-	else if (ffsz_eq(op, "url")) op = "http.url";
+	else if (ffsz_eq(op, "req")) op = "http.req";
 	return exe_provide(op);
 }
 
@@ -396,7 +398,7 @@ int main(int argc, char **argv)
 
 	if (log_open()) goto end;
 	exe_if.log_level = x->conf.log_level;
-	exe_if.log_date_buffer = x->log.date;
+	exe_if.log_date_buffer = x->log_date;
 
 	if (!(x->opif = op_provide(argv[x->argi]))) goto end;
 	if (!(x->op = x->opif->create(&argv[x->argi + 1]))) goto end;

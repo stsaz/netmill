@@ -12,8 +12,8 @@
 #include <ffbase/vector.h>
 #include <ffbase/map.h>
 
-#define NML_VERSION  "0.10"
-#define NML_CORE_VER  10
+#define NML_VERSION  "0.11"
+#define NML_CORE_VER  11
 
 typedef unsigned char u_char;
 typedef unsigned short ushort;
@@ -41,6 +41,11 @@ enum NML_LOG {
 #define ZZKQ_LOG_DEBUG  NML_LOG_DEBUG
 #ifdef NML_ENABLE_LOG_EXTRA
 #define ZZKQ_LOG_EXTRA  NML_LOG_EXTRA
+#endif
+
+#define FFTASKQUEUE_LOG_DEBUG  NML_LOG_DEBUG
+#ifdef NML_ENABLE_LOG_EXTRA
+#define FFTASKQUEUE_LOG_EXTRA  NML_LOG_EXTRA
 #endif
 
 #include <util/kq.h>

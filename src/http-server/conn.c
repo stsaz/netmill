@@ -100,14 +100,14 @@ static int hs_conveyor_component_call(nml_http_sv_conn *c, uint i)
 	const nml_http_sv_component *f = (nml_http_sv_component*)v->comps[i];
 	int r;
 
-	if (!v->rt[i].opened) {
+	if (!CONVEYOR_OPENED_TEST(v, i)) {
 		HS_EXTRALOG(c, "f#%u '%s': opening", i, f->name);
 		r = f->open(c);
 		(void)nmlf_r_str;
 		HS_EXTRALOG(c, "  f#%u '%s': %s", i, f->name, nmlf_r_str[r]);
 		if (r != NMLR_OPEN)
 			return r;
-		v->rt[i].opened = 1;
+		CONVEYOR_OPENED_SET(v, i);
 	}
 
 	HS_EXTRALOG(c, "f#%u '%s': input:%L", i, f->name, c->input.len);
@@ -123,7 +123,7 @@ static void hs_conveyor_run(nml_http_sv_conn *c)
 	int i = v->cur, r;
 	for (;;) {
 
-		if (v->rt[i].done) {
+		if (CONVEYOR_DONE_TEST(v, i)) {
 			r = (!c->chain_going_back) ? NMLR_FWD : NMLR_BACK;
 			if (r == NMLR_FWD)
 				c->output = c->input;
@@ -136,16 +136,16 @@ static void hs_conveyor_run(nml_http_sv_conn *c)
 			c->output = c->input;
 			// fallthrough
 		case NMLR_DONE:
-			v->rt[i].done = 1;
+			CONVEYOR_DONE_SET(v, i);
 			v->active--;
 			v->empty_data_counter = 0;
 			HS_EXTRALOG(c, "chain: %u", v->active);
 			// fallthrough
 
 		case NMLR_FWD:
-			if (!v->rt[i].done) {
+			if (!CONVEYOR_DONE_TEST(v, i)) {
 				if (!c->output.len) {
-					if (v->empty_data_counter > v->active * 2) {
+					if (ff_unlikely(v->empty_data_counter > v->active * 2)) {
 						HS_ERR(c, "detected chain processing loop");
 						FF_ASSERT(0);
 						goto end;
@@ -165,7 +165,7 @@ static void hs_conveyor_run(nml_http_sv_conn *c)
 			// fallthrough
 
 		case NMLR_BACK:
-			if (i == 0) {
+			if (ff_unlikely(i == 0)) {
 				HS_ERR(c, "%s: the first filter asks for more input data", v->comps[i]->name);
 				FF_ASSERT(0);
 				goto end;

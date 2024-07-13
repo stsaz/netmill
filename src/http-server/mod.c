@@ -352,7 +352,7 @@ static int http_wrk_start(struct worker *w)
 
 static int http_run(struct http_sv_exe *sx)
 {
-	if (zzkcq_start(&sx->kcq))
+	if (zzkcq_start(&sx->kcq, -1))
 		return -1;
 
 	struct worker *w;
@@ -447,7 +447,7 @@ static void htsv_destroy()
 {
 }
 
-extern const struct nml_operation_if nml_op_url;
+extern const struct nml_operation_if nml_op_request;
 
 extern const nml_http_cl_component
 	nml_http_cl_resolve,
@@ -478,7 +478,7 @@ static const void* htsv_provide(const char *name)
 		{"client",				&nml_http_client_interface},
 #endif
 		{"http",				&nml_op_http_sv},
-		{"url",					&nml_op_url},
+		{"req",					&nml_op_request},
 		// nml_http_cl_redir
 	};
 	return nml_if_map_find(map, FF_COUNT(map), name);

@@ -7,7 +7,7 @@
 static int gzhc_read_open(nml_http_client *c)
 {
 	ffstr ce = HC_RESPONSE_DATA(c, c->response.content_encoding);
-	if (!ffstr_ieqz(&ce, "gzip"))
+	if (!ffstr_ieqz(&ce, "deflate"))
 		return NMLR_SKIP;
 
 	if (z_inflate_init(&c->gzip.zx, NULL)) {

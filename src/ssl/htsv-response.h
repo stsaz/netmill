@@ -37,28 +37,28 @@ static int slhs_resp_process(nml_http_sv_conn *c)
 		return NMLR_BACK;
 	}
 
-	FF_ASSERT(c->ssl.out_data.len);
+	if (c->ssl.out_data.len) {
+		int r = ffssl_conn_write(c->ssl_conn, c->ssl.out_data.ptr, c->ssl.out_data.len);
+		switch (r) {
+		case -FFSSL_WANTWRITE:
+			ffssl_conn_iobuf(c->ssl_conn, &c->output);
+			HS_EXTRALOG(c, "SSL write data: 0x%p %L", c->output.ptr, c->output.len);
+			return NMLR_FWD;
 
-	int r = ffssl_conn_write(c->ssl_conn, c->ssl.out_data.ptr, c->ssl.out_data.len);
-	switch (r) {
-	case -FFSSL_WANTWRITE:
-		ffssl_conn_iobuf(c->ssl_conn, &c->output);
-		HS_EXTRALOG(c, "SSL write data: 0x%p %L", c->output.ptr, c->output.len);
-		return NMLR_FWD;
+		case -FFSSL_WANTREAD:
+			HS_ERR(c, "SSL renegotiation");
+			return NMLR_ERR;
+		}
 
-	case -FFSSL_WANTREAD:
-		HS_ERR(c, "SSL renegotiation");
-		return NMLR_ERR;
+		if (r < 0) {
+			char e[1000];
+			HS_ERR(c, "ffssl_conn_write: %s", ffssl_error(-r, e, sizeof(e)));
+			return NMLR_ERR;
+		}
+
+		ffstr_shift(&c->ssl.out_data, r);
+		FF_ASSERT(!c->ssl.out_data.len);
 	}
-
-	if (r < 0) {
-		char e[1000];
-		HS_ERR(c, "ffssl_conn_write: %s", ffssl_error(-r, e, sizeof(e)));
-		return NMLR_ERR;
-	}
-
-	ffstr_shift(&c->ssl.out_data, r);
-	FF_ASSERT(!c->ssl.out_data.len);
 
 	if (c->resp_done)
 		return NMLR_DONE;

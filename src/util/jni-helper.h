@@ -2,14 +2,15 @@
 2022, Simon Zolin */
 
 /*
-jni_attach jni_detach
+jni_vm_attach jni_vm_attach_once jni_vm_detach
+jni_vm_env
 jni_local_unref
 jni_global_ref jni_global_unref
 Meta:
 	jni_class jni_class_obj
 	jni_field
 String:
-	jni_js_sz
+	jni_js_sz jni_js_szf
 	jni_sz_js jni_sz_free
 Arrays:
 	jni_arr_len
@@ -19,14 +20,15 @@ Arrays:
 	jni_jsa_sza
 	jni_str_jba
 Object:
+	jni_obj_new
 	jni_obj_jo jni_obj_jo_set
-	jni_obj_sz_set
+	jni_obj_sz_set jni_obj_sz_setf
 	jni_obj_long jni_obj_long_set
-	jni_obj_int
-	jni_obj_bool
+	jni_obj_int jni_obj_int_set
+	jni_obj_bool jni_obj_bool_set
 Functions:
 	jni_func jni_call_void
-	jni_sfunc jni_scall_void
+	jni_sfunc jni_scall_void jni_scall_bool
 Notes:
 	sz	char*
 	js	jstring
@@ -47,12 +49,26 @@ Notes:
 #define JNI_TLONG "J"
 #define JNI_TBOOL "Z"
 #define JNI_TARR "["
+#define JNI_TVOID "V"
 
-#define jni_attach(jvm, envp) \
+#define jni_vm_attach(jvm, envp) \
 	(*jvm)->AttachCurrentThread(jvm, envp, NULL)
 
-#define jni_detach(jvm) \
+static inline int jni_vm_attach_once(JavaVM *jvm, JNIEnv **env, int *attached, int version)
+{
+	int r = (*jvm)->GetEnv(jvm, (void**)env, version);
+	*attached = 0;
+	if (r == JNI_EDETACHED
+		&& 0 == (r = (*jvm)->AttachCurrentThread(jvm, env, NULL)))
+		*attached = 1;
+	return r;
+}
+
+#define jni_vm_detach(jvm) \
 	(*jvm)->DetachCurrentThread(jvm)
+
+#define jni_vm_env(jvm, envp, ver) \
+	(*jvm)->GetEnv(jvm, (void**)(envp), ver)
 
 #define jni_local_unref(jobj) \
 	(*env)->DeleteLocalRef(env, jobj)
@@ -76,10 +92,34 @@ T: JNI_T... */
 #define jni_field(jclazz, name, T) \
 	(*env)->GetFieldID(env, jclazz, name, T)
 
+#define jni_field_str(jclazz, name) \
+	(*env)->GetFieldID(env, jclazz, name, JNI_TSTR)
+
+#define jni_field_long(jclazz, name) \
+	(*env)->GetFieldID(env, jclazz, name, JNI_TLONG)
+
+#define jni_field_int(jclazz, name) \
+	(*env)->GetFieldID(env, jclazz, name, JNI_TINT)
+
+#define jni_field_bool(jclazz, name) \
+	(*env)->GetFieldID(env, jclazz, name, JNI_TBOOL)
+
+
 
 /** jstring = char* */
 #define jni_js_sz(sz) \
 	(*env)->NewStringUTF(env, sz)
+
+static inline jstring jni_js_szf(JNIEnv *env, const char *fmt, ...)
+{
+	va_list va;
+	va_start(va, fmt);
+	char *sz = ffsz_allocfmtv(fmt, va);
+	va_end(va);
+	jstring js = (*env)->NewStringUTF(env, sz);
+	ffmem_free(sz);
+	return js;
+}
 
 /** char* = jstring */
 #define jni_sz_js(js) \
@@ -137,8 +177,12 @@ static inline jobjectArray jni_jsa_sza(JNIEnv *env, char **asz, ffsize n)
 }
 
 
+/** object = new */
+#define jni_obj_new(jc, ...) \
+	(*env)->NewObject(env, jc, __VA_ARGS__)
+
 /** obj.object = VAL */
-#define	jni_obj_jo_set(jobj, jfield, val) \
+#define jni_obj_jo_set(jobj, jfield, val) \
 	(*env)->SetObjectField(env, jobj, jfield, val)
 
 /** object = obj.object */
@@ -153,21 +197,39 @@ static inline void jni_obj_sz_set(JNIEnv *env, jobject jo, jfieldID jf, const ch
 	jni_local_unref(js);
 }
 
+static inline void jni_obj_sz_setf(JNIEnv *env, jobject jo, jfieldID jf, const char *fmt, ...)
+{
+	va_list va;
+	va_start(va, fmt);
+	char *sz = ffsz_allocfmtv(fmt, va);
+	va_end(va);
+	jni_obj_sz_set(env, jo, jf, sz);
+	ffmem_free(sz);
+}
+
 /** long = obj.long */
 #define jni_obj_long(jobj, jfield) \
 	(*env)->GetLongField(env, jobj, jfield)
 
 /** obj.long = VAL */
-#define	jni_obj_long_set(jobj, jfield, val) \
+#define jni_obj_long_set(jobj, jfield, val) \
 	(*env)->SetLongField(env, jobj, jfield, val)
 
 /** int = obj.int */
 #define jni_obj_int(jobj, jfield) \
 	(*env)->GetIntField(env, jobj, jfield)
 
+/** obj.int = VAL */
+#define jni_obj_int_set(jobj, jfield, val) \
+	(*env)->SetIntField(env, jobj, jfield, val)
+
 /** bool = obj.bool */
 #define jni_obj_bool(jobj, jfield) \
 	(*env)->GetBooleanField(env, jobj, jfield)
+
+/** obj.bool = VAL */
+#define jni_obj_bool_set(jobj, jfield, val) \
+	(*env)->SetBooleanField(env, jobj, jfield, val)
 
 
 /** jmethodID of a class function
@@ -188,7 +250,10 @@ class C {
 	(*env)->GetStaticMethodID(env, jclazz, name, sig)
 
 #define jni_call_void(jobj, jfunc, ...) \
-	(*env)->CallVoidMethod(env, jobj, jfunc, #__VA_ARGS__)
+	(*env)->CallVoidMethod(env, jobj, jfunc, ##__VA_ARGS__)
 
-#define jni_scall_void(jobj, jfunc, ...) \
-	(*env)->CallVoidMethod(env, jobj, jfunc, #__VA_ARGS__)
+#define jni_scall_void(jclazz, jfunc, ...) \
+	(*env)->CallStaticVoidMethod(env, jclazz, jfunc, ##__VA_ARGS__)
+
+#define jni_scall_bool(jclazz, jfunc, ...) \
+	(*env)->CallStaticBooleanMethod(env, jclazz, jfunc, ##__VA_ARGS__)

@@ -52,6 +52,7 @@ static int hs_proxy_open(nml_http_sv_conn *c)
 	ffstr method = HS_REQUEST_DATA(c, c->req.method);
 	if (ffstr_eqz(&method, "CONNECT")) {
 		p->tunnel = 1;
+		c->req_no_chunked = 1;
 		c->resp_connection_keepalive = 0;
 		cc->chain = htsv_http_cl_tunnel_chain;
 

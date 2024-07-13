@@ -7,10 +7,8 @@ struct nml_conveyor {
 	const nml_component **comps;
 	uint empty_data_counter;
 	uint total, active, cur;
-	struct {
-		ffbyte opened :1;
-		ffbyte done :1;
-	} rt[16];
+	uint opened; // bit[]
+	uint done; // bit[]
 
 #ifdef NML_ENABLE_LOG_EXTRA
 	void (*log)(void *log_obj, uint level, const char *ctx, const char *id, const char *format, ...);
@@ -18,6 +16,11 @@ struct nml_conveyor {
 	const char *log_ctx, *log_id;
 #endif
 };
+
+#define CONVEYOR_OPENED_TEST(v, i)  ffbit_test32(&v->opened, i)
+#define CONVEYOR_DONE_TEST(v, i)  ffbit_test32(&v->done, i)
+#define CONVEYOR_OPENED_SET(v, i)  ffbit_set32(&v->opened, i)
+#define CONVEYOR_DONE_SET(v, i)  ffbit_set32(&v->done, i)
 
 #define conveyor_extralog(c, ...)
 #ifdef NML_ENABLE_LOG_EXTRA
@@ -33,6 +36,7 @@ static inline void conveyor_init(struct nml_conveyor *v, const nml_component **c
 {
 	uint i;
 	for (i = 0;  comps[i] != NULL;  i++) {}
+	FF_ASSERT(i <= 32);
 	v->total = i;
 	v->active = i;
 	v->comps = comps;
@@ -43,14 +47,15 @@ static inline void conveyor_reset(struct nml_conveyor *v)
 	v->empty_data_counter = 0;
 	v->active = v->total;
 	v->cur = 0;
-	ffmem_zero_obj(&v->rt);
+	v->opened = 0;
+	v->done = 0;
 }
 
 /** Close all opened components */
 static inline void conveyor_close(struct nml_conveyor *v, void *object)
 {
 	for (uint i = 0;  v->comps[i] != NULL;  i++) {
-		if (v->rt[i].opened) {
+		if (CONVEYOR_OPENED_TEST(v, i)) {
 			const nml_component *f = v->comps[i];
 			conveyor_extralog(v, "f#%u '%s': closing", i, f->name);
 			if (f->close != NULL)

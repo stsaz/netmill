@@ -14,7 +14,7 @@ static int gzhs_write_open(nml_http_sv_conn *c)
 	while (ae.len) {
 		ffstr_splitby(&ae, ',', &tag, &ae);
 		ffstr_trimwhite(&tag);
-		if (ffstr_eqz(&tag, "gzip"))
+		if (ffstr_eqz(&tag, "deflate"))
 			goto open;
 	}
 	return NMLR_SKIP; // the client doesn't accept gzip
@@ -74,7 +74,7 @@ static int gzhs_write_process(nml_http_sv_conn *c)
 		c->gzip_hdr = 1;
 		c->resp.content_length = ~0ULL;
 		ffstr_setz(&c->resp.headers,
-			"Content-Encoding: gzip\r\n"
+			"Content-Encoding: deflate\r\n"
 			"Vary: Accept-Encoding\r\n"
 			);
 	}

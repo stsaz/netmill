@@ -24,14 +24,14 @@ struct nml_wrk {
 
 	struct zzkq_kcq kq_kcq;
 
-	fftimerqueue timer_q;
-	struct zzkq_timer kq_timer;
-	uint timer_now_ms;
-	fftime date_now;
-	char date_buf[FFS_LEN("0000-00-00T00:00:00.000")+1];
+	fftimerqueue		timer_q;
+	struct zzkq_timer	kq_timer;
+	uint				timer_now_ms;
+	fftime				date_now;
+	char				date_buf[FFS_LEN("0000-00-00T00:00:00.000")+1];
 
-	fftaskqueue tq;
-	struct zzkq_tq kq_tq;
+	fftaskqueue		tq;
+	struct zzkq_tq	kq_tq;
 };
 
 
@@ -107,7 +107,7 @@ static int nml_wrk_kq_attach(void *p, ffsock sk, struct zzkevent *kev, void *obj
 {
 	struct nml_wrk *w = p;
 	kev->obj = obj;
-	return zzkq_attach(&w->kq, (fffd)sk, kev);
+	return zzkq_attach(&w->kq, (fffd)sk, kev, FFKQ_READWRITE);
 }
 
 static ffkq nml_wrk_kq(void *p)
@@ -167,10 +167,12 @@ static int nml_worker_conf(struct nml_wrk *w, struct nml_wrk_conf *conf)
 	wk_time_update(w);
 
 	struct zzkq_conf kc = {
-		.log_level = w->conf.log_level,
-		.log = w->conf.log,
-		.log_obj = w->conf.log_obj,
-		.log_ctx = w->conf.log_ctx,
+		.log = {
+			.level = w->conf.log_level,
+			.func = w->conf.log,
+			.obj = w->conf.log_obj,
+			.ctx = w->conf.log_ctx,
+		},
 
 		.events_wait = w->conf.events_num,
 		.max_objects = w->conf.max_connections,
@@ -183,10 +185,21 @@ static int nml_worker_conf(struct nml_wrk *w, struct nml_wrk_conf *conf)
 		return -1;
 
 	fftimerqueue_init(&w->timer_q);
-	if (zzkq_timer_create(&w->kq_timer, w->kq.kq, w->conf.timer_interval_msec, (void*)nml_wrk_ontimer, w))
+	zzkq_timer_init(&w->kq_timer);
+	if (zzkq_timer_create(&w->kq_timer)) {
+		WK_SYSERR(w, "timer create");
 		return -1;
+	}
+	if (zzkq_timer_start(&w->kq_timer, w->kq.kq, w->conf.timer_interval_msec, (void*)nml_wrk_ontimer, w)) {
+		WK_SYSERR(w, "timer start");
+		return -1;
+	}
 
 	fftaskqueue_init(&w->tq);
+	w->tq.log.level = w->conf.log_level;
+	w->tq.log.func = w->conf.log;
+	w->tq.log.obj = w->conf.log_obj;
+	w->tq.log.ctx = w->conf.log_ctx;
 	if (zzkq_tq_attach(&w->kq_tq, w->kq.kq, &w->tq))
 		return -1;
 	return 0;

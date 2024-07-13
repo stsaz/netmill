@@ -63,6 +63,10 @@ static int slhs_req_process(nml_http_sv_conn *c)
 		char e[1000];
 		HS_ERR(c, "ffssl_conn_read: %s", ffssl_error(-r, e, sizeof(e)));
 		return NMLR_ERR;
+
+	} else if (r == 0) {
+		HS_DEBUG(c, "received SSL FIN from client");
+		return NMLR_FIN;
 	}
 
 	buf->len += r;
