@@ -2,15 +2,21 @@
 
 # netmill: cross-build on Linux for Alpine
 
+IMAGE_NAME=netmill-alpine-builder
+CONTAINER_NAME=netmill_alpine_build
+ARGS=${@@Q}
+
 set -xe
 
 if ! test -d "../netmill" ; then
 	exit 1
 fi
 
-if ! podman container exists netmill_alpine_build ; then
-	# Create builder image
-	cat <<EOF | podman build -t netmill-alpine-builder -f - .
+if ! podman container exists $CONTAINER_NAME ; then
+	if ! podman image exists $IMAGE_NAME ; then
+
+		# Create builder image
+		cat <<EOF | podman build -t $IMAGE_NAME -f - .
 FROM alpine:3.18
 RUN apk add \
  build-base \
@@ -18,12 +24,13 @@ RUN apk add \
 RUN apk add \
  openssl openssl-dev
 EOF
+	fi
 
 	# Create builder container
 	podman create --attach --tty \
 	 -v `pwd`/..:/src \
-	 --name netmill_alpine_build \
-	 netmill-alpine-builder \
+	 --name $CONTAINER_NAME \
+	 $IMAGE_NAME \
 	 sh -c 'cd /src/netmill && source ./build_linux.sh'
 fi
 
@@ -42,8 +49,8 @@ make -j8 \
  ROOT_DIR=../.. \
  CFLAGS_USER=-DFF_MUSL \
  BINDIR=_linux-musl-amd64 \
- $@
+ $ARGS
 EOF
 
 # Build inside the container
-podman start --attach netmill_alpine_build
+podman start --attach $CONTAINER_NAME

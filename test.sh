@@ -1,14 +1,38 @@
 #!/bin/bash
-
 # netmill tester
 
+TESTS=(
+	help
+	http
+		http_local https_local
+		http_proxy https_proxy
+	dns_local dns_upstream
+	# dns_doh
+	cert
+	if
+)
+
 if test "$#" == "0" ; then
-	echo "Usage: test.sh TEST"
-	echo "Tests: all help http_local http_proxy dns_local dns_upstream dns_doh cert"
+	echo "Usage: test.sh TEST..."
+	echo "TEST: ${TESTS[@]}"
 	exit 1
 fi
 
-set -xe
+CMDS=("$@")
+if test "$1" == "all" ; then
+	CMDS=("${TESTS[@]}")
+fi
+
+if test "$DEBUG" == 1 ; then
+	DEBUG=-D
+else
+	DEBUG=
+fi
+
+set -e
+if test "$V" == 1 ; then
+	set -x
+fi
 
 test_help() {
 	./netmill -help
@@ -16,13 +40,13 @@ test_help() {
 	./netmill dns help
 	./netmill http help
 	./netmill service help
-	./netmill url -help
+	./netmill req -help
 }
 
 test_kill_pid__filename() {
 	local filename=$1
 	if test -f $filename ; then
-		pid=$(cat $filename)
+		local pid=$(cat $filename)
 		rm $filename
 		kill -9 $pid || true
 	fi
@@ -42,19 +66,19 @@ test_http_local() {
 	echo $! >nml.pid
 	sleep .5
 
-	echo Normal download
-	./netmill url "127.0.0.1:8080/README.md" -o nmltest/README.md
+	echo '### Normal download'
+	./netmill req "127.0.0.1:8080/README.md" -o nmltest/README.md
 	diff README.md nmltest/README.md
 	rm nmltest/README.md
 
-	echo HEAD method
-	./netmill url "127.0.0.1:8080/README.md" -check -method HEAD -print_headers
+	echo '### HEAD method'
+	./netmill req "127.0.0.1:8080/README.md" -check -method HEAD -print_headers
 
-	echo Directory auto index
-	./netmill url "127.0.0.1:8080/" -o nmltest/hs-dir.html
+	echo '### Directory auto index'
+	./netmill req "127.0.0.1:8080/" -o nmltest/hs-dir.html
 	cat nmltest/hs-dir.html
 
-	echo 2 pipelined requests with 404 response
+	echo '### 2 pipelined requests with 404 response'
 
 	cat <<EOF | nc 127.0.0.1 8080
 GET /404-1 HTTP/1.1
@@ -66,7 +90,7 @@ Connection: close
 
 EOF
 
-	echo Bad request
+	echo '### Bad request'
 
 cat <<EOF | nc 127.0.0.1 8080
 bad request
@@ -76,8 +100,8 @@ EOF
 	test_interrupt_pid__filename nml.pid
 	sleep .5
 
-	echo Connection refused
-	./netmill url 127.0.0.1:8080/README.md -o nmltest/README.md || true
+	echo '### Connection refused'
+	./netmill req 127.0.0.1:8080/README.md -o nmltest/README.md || true
 }
 
 test_https_local() {
@@ -89,16 +113,17 @@ test_https_local() {
 
 	# (re)start local file server
 	test_kill_pid__filename nml.pid
-	./netmill http \
-		listen "8080" \
+	./netmill $DEBUG http \
+		listen 4443 \
+		threads 1 \
 		cert "nmltest/htsv.pem" \
 		www "." &
 	echo $! >nml.pid
 	sleep .5
 
-	echo Download via TLS
+	echo '### Download via TLS'
 	rm -f nmltest/README.md
-	./netmill url "https://127.0.0.1:8080/README.md" -trust -o "nmltest/README.md"
+	./netmill req "https://127.0.0.1:4443/README.md" -trust -o "nmltest/README.md"
 	diff README.md nmltest/README.md
 	rm nmltest/README.md
 
@@ -113,20 +138,20 @@ test_http_proxy() {
 
 	# (re)start proxy server
 	test_kill_pid__filename nml2.pid
-	./netmill http  listen 8181  threads 1  proxy &
+	./netmill $DEBUG http  listen 8181  threads 1  proxy &
 	echo $! >nml2.pid
 	sleep .5
 
-	echo Normal download via proxy
+	echo '### Normal download via proxy'
 
-	./netmill url "127.0.0.1:8080/README.md" -o "nmltest/README.md" \
+	./netmill req "127.0.0.1:8080/README.md" -o "nmltest/README.md" \
 		-proxy "127.0.0.1:8181"
 	diff README.md nmltest/README.md
 
-	echo 'Repeat download via existing (cached) connection'
+	echo '### Repeat download via existing (cached) connection'
 
 	rm -f nmltest/README.md
-	./netmill url "127.0.0.1:8080/README.md" -o "nmltest/README.md" \
+	./netmill req "127.0.0.1:8080/README.md" -o "nmltest/README.md" \
 		-proxy "127.0.0.1:8181"
 	diff README.md nmltest/README.md
 	rm nmltest/README.md
@@ -144,7 +169,7 @@ test_http_proxy() {
 
 	test_interrupt_pid__filename nml.pid
 
-	echo Chunked response from upstream
+	echo '### Chunked response from upstream'
 
 	cat <<EOF | nc -l 127.0.0.1 8080 &
 HTTP/1.1 200 OK UPSTREAM
@@ -161,43 +186,66 @@ llo
 
 EOF
 	sleep .5
-	./netmill url "127.0.0.1:8080/README.md" -o "nmltest/README.md" \
+	rm -f nmltest/README.md
+	local out=$(./netmill req "127.0.0.1:8080/README.md" -o "nmltest/README.md" \
 		-proxy "127.0.0.1:8181" \
-		-print_headers
+		-print_headers)
+	grep "HTTP/1.1 200 OK UPSTREAM" <<<$out
+	grep "Upstream-Header: Value" <<<$out
+	test "$(cat nmltest/README.md)" == "hello"
 	kill $! || true
 
 	test_interrupt_pid__filename nml2.pid
 }
 
-test_http_proxy_tunnel() {
+test_https_proxy() {
+	if ! test -f nmltest/htsv.pem ; then
+		./netmill cert generate \
+			subject "CN=netmill.test" \
+			output "nmltest/htsv.pem"
+	fi
+
+	# (re)start local file server
+	test_kill_pid__filename nml.pid
+	./netmill $DEBUG http  \
+		listen 4443 \
+		threads 1 \
+		cert "nmltest/htsv.pem" \
+		www . &
+	echo $! >nml.pid
+
 	# (re)start proxy server
 	test_kill_pid__filename nml2.pid
-	./netmill http  listen 8181  threads 1  proxy &
+	./netmill $DEBUG http  listen 8181  threads 1  proxy &
 	echo $! >nml2.pid
 	sleep .5
 
-	echo Tunnel
+	echo HTTPS request via HTTP proxy
+	rm -f nmltest/README.md
+	# ./netmill req "https://127.0.0.1:4443/README.md" -o "nmltest/README.md" \
+	# 	-proxy "127.0.0.1:8181"
+	curl -s -o "nmltest/README.md" -k \
+		--proxy http://127.0.0.1:8181 \
+		https://127.0.0.1:4443/README.md
+	diff README.md nmltest/README.md
+	rm nmltest/README.md
 
-	cat <<EOF | nc -l 127.0.0.1 8080 &
-output-data
-EOF
-	sleep .5
-	cat <<EOF | nc 127.0.0.1 8181
-CONNECT localhost:8080 HTTP/1.1
-Host: localhost:8080
-
-input-data
-EOF
-	kill $! || true
-
+	test_interrupt_pid__filename nml.pid
 	test_interrupt_pid__filename nml2.pid
+}
+
+test_http() {
+	test_http_local
+	test_http_proxy
+	test_https_local
+	test_https_proxy
 }
 
 test_dns_local() {
 	# (re)start DNS server with local hosts file
 	test_kill_pid__filename nml.pid
 	echo 'block.com' >nmltest/hosts
-	./netmill -D dns \
+	./netmill $DEBUG dns \
 		listen 127.0.0.1:5353 \
 		hosts nmltest/hosts &
 	echo $! >nml.pid
@@ -217,14 +265,14 @@ test_dns_upstream() {
 	# (re)start DNS server with local hosts file
 	test_kill_pid__filename nml.pid
 	echo 'block.com' >nmltest/hosts
-	./netmill -D dns \
+	./netmill $DEBUG dns \
 		listen 127.0.0.1:5353 \
 		hosts nmltest/hosts &
 	echo $! >nml.pid
 
 	# (re)start DNS server with upstream server
 	test_kill_pid__filename nml2.pid
-	./netmill -D dns \
+	./netmill $DEBUG dns \
 		listen 127.0.0.1:5454 \
 		upstream 127.0.0.1:5353 &
 	echo $! >nml2.pid
@@ -246,7 +294,7 @@ test_dns_doh() {
 
 	# (re)start DNS server with DoH upstream server
 	test_kill_pid__filename nml.pid
-	./netmill -D dns \
+	./netmill $DEBUG dns \
 		listen 127.0.0.1:5454 \
 		hosts nmltest/hosts \
 		upstream https://dns.google &
@@ -271,26 +319,21 @@ test_if() {
 	./netmill if
 }
 
-test_all() {
-	test_help
-	test_http_local
-	test_https_local
-	test_http_proxy
-	test_http_proxy_tunnel
-	test_dns_local
-	test_dns_upstream
-	# test_dns_doh
-	test_cert
-	test_if
+test_clean() {
+	test_kill_pid__filename nml.pid
+	test_kill_pid__filename nml2.pid
 }
 
 mkdir -p nmltest
 rm -rf nmltest/*
 
-while test "$#" != "0" ; do
-	test_$1
-	shift
+for cmd in "${CMDS[@]}" ; do
+
+	rm -rf ./nmltest/*
+	test_$cmd
+
 done
 
+test_clean
 rm -rf nmltest
 echo DONE

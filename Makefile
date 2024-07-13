@@ -7,14 +7,8 @@ FFSYS := $(ROOT_DIR)/ffsys
 
 include $(FFBASE)/conf.mk
 
-SUBMAKE := $(MAKE) -f $(firstword $(MAKEFILE_LIST))
-
-EXE := netmill
+EXE := netmill$(DOTEXE)
 APP_DIR := netmill-0
-ifeq "$(OS)" "windows"
-	EXE := netmill.exe
-endif
-
 
 CFLAGS := -std=c99
 CFLAGS += -Wall -Wextra -Wno-unused-parameter -Wno-sign-compare -Wno-multichar
@@ -60,7 +54,7 @@ endif
 include $(NETMILL)/src/core/Makefile
 include $(NETMILL)/src/dns-server/Makefile
 include $(NETMILL)/src/exe/Makefile
-include $(NETMILL)/src/firewall/Makefile
+# include $(NETMILL)/src/firewall/Makefile
 include $(NETMILL)/src/gzip/Makefile
 include $(NETMILL)/src/http-client/Makefile
 include $(NETMILL)/src/http-server/Makefile
@@ -79,20 +73,17 @@ if.$(SO): nif.o
 	$(LINK) -shared $+ $(LINKFLAGS) $(LINK_IPHELPAPI) -o $@
 
 
-build: $(EXE) \
-	$(MODS)
+ifeq "$(TARGETS)" ""
+override TARGETS := core.$(SO) $(EXE) $(MODS)
+endif
+build: $(TARGETS)
 
-strip-debug: core.$(SO).debug \
-		$(EXE).debug \
-		$(MODS:.$(SO)=.$(SO).debug)
+strip-debug: $(addsuffix .debug,$(TARGETS))
 %.debug: %
 	$(OBJCOPY) --only-keep-debug $< $@
 	$(STRIP) $<
 	$(OBJCOPY) --add-gnu-debuglink=$@ $<
 	touch $@
-
-clean:
-	rm -v $(EXE) $(EXE_OBJ)
 
 app:
 	mkdir -p $(APP_DIR)
@@ -137,8 +128,12 @@ $(PKG_DEBUG_NAME):
 	$(PKG_PACKER) $@ *.debug
 package-debug: $(PKG_DEBUG_NAME)
 
+release: default
+	$(SUBMAKE) package
+	$(SUBMAKE) package-debug
 
-docker:
+
+docker: $(APP_DIR)
 	docker build -t netmill:latest .
 
 

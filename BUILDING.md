@@ -12,30 +12,38 @@ git clone https://github.com/stsaz/netmill
 cd netmill
 ```
 
-## Step 2. Build
+## Step 2. Cross-Build
 
-* Build on Linux:
+* Cross-Build on Linux for Debian-bookworm:
 
 	```sh
-	make -j8
+	bash xbuild-debianbookworm.sh
 	```
 
 * Cross-Build on Linux for Windows:
 
 	```sh
-	sh xbuild-win64.sh
+	bash xbuild-win64.sh
 	```
 
 * Cross-Build on Linux for Alpine:
 
 	```sh
-	sh xbuild-alpine.sh
+	bash xbuild-alpine.sh
 	```
 
 * Cross-Build on Linux for Android:
 
 	```sh
 	make -j8 -C android SDK_DIR=$SDK_DIR
+	```
+
+## Step 2 (Option 2). Native Build
+
+* Build on Linux:
+
+	```sh
+	make -j8
 	```
 
 * Build on FreeBSD:
@@ -52,4 +60,6 @@ cd netmill
 	make -j8 -f ../../netmill/Makefile ROOT_DIR=../..
 	```
 
-`netmill-0` is an application directory.
+## Step 3. Use
+
+`netmill-0` is the application directory.

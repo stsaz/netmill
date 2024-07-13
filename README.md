@@ -12,6 +12,7 @@ Current features:
 * X509 Certificate Generator
 * Ingress Firewall (XDP/Linux)
 * ping (XDP/Linux)
+* Show network interfaces
 
 Contents:
 
@@ -21,6 +22,7 @@ Contents:
 * [Ingress Firewall](#ingress-firewall)
 * [XDP ping](#xdp-ping)
 * [Certificate Generator](#certificate-generator)
+* [Show network interfaces](#show-network-interfaces)
 * [Build](#build)
 * [Install](#install)
 * [HTTP server as a library](#http-server-as-a-library)
@@ -71,7 +73,7 @@ Examples:
 
 ```sh
 # Download a file over HTTP
-netmill url https://host.com/path/file
+netmill req https://host.com/path/file
 ```
 
 Features:
@@ -225,6 +227,13 @@ netmill cert \
  subject "/CN=hostname" \
  until "2030-01-01 00:00:00" \
  output cert.pem
+```
+
+
+## Show network interfaces
+
+```sh
+netmill if
 ```
 
 
