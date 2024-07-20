@@ -4,7 +4,7 @@ include ../config.mk
 
 VER := 3.1.3
 URL := https://www.openssl.org/source/openssl-$(VER).tar.gz
-PKG := $(notdir $(URL))
+PKG := $(NML_3PT)/openssl/$(notdir $(URL))
 DIR := openssl-$(VER)
 LIB := libssl.so.3
 ifeq "$(OS)" "windows"

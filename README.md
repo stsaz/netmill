@@ -1,6 +1,6 @@
 # netmill
 
-<img src="wind-mill.png" width="128" height="128">
+![](res/netmill.svg)
 
 netmill - network tools for Linux, Android, Windows.
 You can use it as a standalone app or as a library via C and Java interface.
@@ -12,20 +12,38 @@ Current features:
 * X509 Certificate Generator
 * Ingress Firewall (XDP/Linux)
 * ping (XDP/Linux)
-* Show network interfaces
+* Show Network Interfaces
 
 Contents:
 
-* [HTTP Server](#http-server)
-* [HTTP Client](#http-client)
-* [DNS Server](#dns-server)
-* [Ingress Firewall](#ingress-firewall)
-* [XDP ping](#xdp-ping)
-* [Certificate Generator](#certificate-generator)
-* [Show network interfaces](#show-network-interfaces)
+* [Features](#features)
+	* [HTTP Server](#http-server)
+	* [HTTP Client](#http-client)
+	* [DNS Server](#dns-server)
+	* [Ingress Firewall](#ingress-firewall)
+	* [XDP ping](#xdp-ping)
+	* [Certificate Generator](#certificate-generator)
+	* [Show Network Interfaces](#show-network-interfaces)
 * [Build](#build)
 * [Install](#install)
 * [HTTP server as a library](#http-server-as-a-library)
+
+
+## Features
+
+| Feature | Linux | Windows | Android |
+| --- | --- | --- | --- |
+| GUI                     | ❌ | ❌ | ✅ |
+| CLI                     | ✅ | ✅ | ❌ |
+| HTTP Server             | ✅ | ✅ | ✅ |
+| HTTP Server +gzip       | ✅ | ✅ | ❌ |
+| HTTP Server +SSL        | ✅ | ✅ | ❌ |
+| HTTP Client             | ✅ | ✅ | ❌ |
+| DNS Server              | ✅ | ✅ | ❌ |
+| Certificate Generator   | ✅ | ✅ | ❌ |
+| Show Network Interfaces | ✅ | ✅ | ❌ |
+| Ingress Firewall        | ✅ | ❌ | ❌ |
+| XDP ping                | ✅ | ❌ | ❌ |
 
 
 ## HTTP Server
@@ -230,7 +248,7 @@ netmill cert \
 ```
 
 
-## Show network interfaces
+## Show Network Interfaces
 
 ```sh
 netmill if

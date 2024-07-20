@@ -48,11 +48,17 @@ fi
 cat >build_linux.sh <<EOF
 set -xe
 
+mkdir -p ../ffpack/_linux-amd64
 make -j8 zlib \
- -C ../ffpack
+ -C ../ffpack/_linux-amd64 \
+ -f ../Makefile \
+ -I ..
 
+mkdir -p 3pt/_linux-amd64
 make -j8 \
- -C 3pt
+ -C 3pt/_linux-amd64 \
+ -f ../Makefile \
+ -I ..
 
 mkdir -p _linux-amd64
 make -j8 \

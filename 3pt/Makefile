@@ -1,12 +1,9 @@
 # Build third-party libraries
 
+export NML_3PT := $(dir $(firstword $(MAKEFILE_LIST)))
 include config.mk
-TGT_DIR := _$(SYS)-$(CPU)
-ROOT := ../..
 
-default:
-	mkdir -p $(TGT_DIR)
-	$(MAKE) openssl
+default: openssl
 
 LIB_OPENSSL := $(TGT_DIR)/libssl.$(SO)
 ifeq "$(OS)" "windows"
@@ -14,8 +11,7 @@ ifeq "$(OS)" "windows"
 endif
 openssl: $(LIB_OPENSSL)
 $(LIB_OPENSSL):
-	$(MAKE) -I.. -C openssl
-	cp openssl/*.$(SO)* $(TGT_DIR)
+	$(MAKE) -f $(NML_3PT)/openssl/Makefile
 
 
 libbpf:

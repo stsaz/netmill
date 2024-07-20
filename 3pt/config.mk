@@ -6,7 +6,7 @@ CFLAGS := -fpic -fvisibility=hidden
 CFLAGS += -O3
 CXXFLAGS := $(CFLAGS)
 
-LINKFLAGS = -fpic $(LINK_INSTALLNAME_LOADERPATH) -lm
+LINKFLAGS = -fpic $(LINK_INSTALLNAME_LOADERPATH)
 LINKFLAGS += -s
 ifeq "$(COMPILER)" "gcc"
 	LINKFLAGS += -static-libgcc

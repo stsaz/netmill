@@ -42,14 +42,20 @@ fi
 cat >build_win64.sh <<EOF
 set -xe
 
+mkdir -p ../ffpack/_windows-amd64
 make -j8 zlib \
- -C ../ffpack \
+ -C ../ffpack/_windows-amd64 \
+ -f ../Makefile \
+ -I .. \
  OS=windows \
  COMPILER=gcc \
  CROSS_PREFIX=x86_64-w64-mingw32-
 
+mkdir -p 3pt/_windows-amd64
 make -j8 \
- -C 3pt \
+ -C 3pt/_windows-amd64 \
+ -f ../Makefile \
+ -I .. \
  OS=windows \
  COMPILER=gcc \
  CROSS_PREFIX=x86_64-w64-mingw32-
