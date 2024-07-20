@@ -6,7 +6,7 @@
 #include <util/ethernet.h>
 #include <ffsys/netconf.h>
 #include <ffsys/std.h>
-#include <ffsys/globals.h>
+// #include <ffsys/globals.h>
 
 const nml_exe *exe;
 #define IF_ERR(i, ...) \

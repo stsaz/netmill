@@ -10,7 +10,7 @@ include $(FFBASE)/conf.mk
 EXE := netmill$(DOTEXE)
 APP_DIR := netmill-0
 
-CFLAGS := -std=c99
+CFLAGS := -std=c11
 CFLAGS += -Wall -Wextra -Wno-unused-parameter -Wno-sign-compare -Wno-multichar
 ifeq "$(COMPILER)" "gcc"
 	CFLAGS += -Wno-nonnull -Wno-array-bounds -Wno-stringop-overflow

@@ -1,0 +1,2 @@
+-keep class com.github.stsaz.netmill.NetMill {*;}
+-keep class com.github.stsaz.netmill.NetMill$HttpServerOptions {*;}

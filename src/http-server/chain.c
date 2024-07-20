@@ -70,8 +70,8 @@ const nml_http_sv_component** nml_http_sv_chain(const nml_exe *exe, uint ssl)
 	for (uint i = 0;  i < n;  i++) {
 		if (names[i].iface)
 			*pc++ = names[i].iface;
-		else
-			*pc++ = exe->provide(names[i].name);
+		// else
+		// 	*pc++ = exe->provide(names[i].name);
 	}
 	*pc++ = NULL;
 	return c;
