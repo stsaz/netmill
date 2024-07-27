@@ -100,9 +100,8 @@ static int url_fin(struct url_conf *uc)
 			return R_BADVAL;
 		}
 		ux->conf.hcc.proxy_port = pn;
-	} else {
-		if (ux->conf.https && !up.port.len)
-			ux->conf.hcc.server_port = 443;
+	} else if (!up.port.len) {
+		ux->conf.hcc.server_port = (!ux->conf.https) ? 80 : 443;
 	}
 	return 0;
 }
@@ -114,7 +113,7 @@ static int url_help()
 \n\
     `netmill url` [OPTIONS] URL\n\
 \n\
-URL format: [scheme://] host.com [:port] [/file]\n\
+URL format: [scheme://] host [:port] [/file]\n\
 \n\
 OPTIONS:\n\
 \n\
