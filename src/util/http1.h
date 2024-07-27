@@ -180,7 +180,7 @@ static inline int http_resp_parse(ffstr resp, ffstr *proto, ffuint *code, ffstr 
 
 /** Parse HTTP header pair, e.g. "Key: Value\r\n"
 Format:
-  (-0-9A-Za-z)+: *(\w)* *\r\n
+  (-0-9A-Za-z)+ *: *(\w)* *\r\n
 name: [output] field name, undefined on last CRLF
 value: [output] field value, undefined on last CRLF
 Return N of bytes processed
@@ -195,10 +195,22 @@ static inline int http_hdr_parse(ffstr data, ffstr *name, ffstr *value)
 		return 0;
 	else if (r == 0)
 		goto crlf;
-	else if (d[r] != ':' || *d == '-')
-		return -1;
+	if (*d == '-')
+		return -1; // Header name starts with `-`
 	ffstr_set(name, d, r);
-	d += r+1;
+	d += r;
+
+	for (;;) {
+		if (d == end)
+			return 0;
+		if (*d != ' ')
+			break;
+		d++;
+	}
+
+	if (*d != ':')
+		return -1;
+	d++;
 
 	for (;;) {
 		if (d == end)

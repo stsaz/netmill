@@ -5,9 +5,9 @@ include config.mk
 
 default: openssl
 
-LIB_OPENSSL := $(TGT_DIR)/libssl.$(SO)
+LIB_OPENSSL := libssl.$(SO)
 ifeq "$(OS)" "windows"
-	LIB_OPENSSL := $(TGT_DIR)/libssl-3-x64.$(SO)
+	LIB_OPENSSL := libssl-3-x64.$(SO)
 endif
 openssl: $(LIB_OPENSSL)
 $(LIB_OPENSSL):
