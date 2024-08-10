@@ -6,9 +6,11 @@ VER := 3.1.3
 URL := https://www.openssl.org/source/openssl-$(VER).tar.gz
 PKG := $(NML_3PT)/openssl/$(notdir $(URL))
 DIR := openssl-$(VER)
-LIB := libssl.so.3
+LIB := libssl.so
 ifeq "$(OS)" "windows"
 	LIB := libssl-3-x64.dll
+else ifeq "$(SYS)" "linux"
+	LIB := libssl.so.3
 endif
 
 default: $(LIB)
@@ -25,8 +27,16 @@ $(DIR): $(PKG)
 
 # configure
 CONFIGURE_FLAGS:=
-ifeq "$(OS)" "windows"
-	CONFIGURE_FLAGS := mingw64
+ifeq "$(CPU)" "amd64"
+	ifeq "$(SYS)" "android"
+		CONFIGURE_FLAGS := android-x86_64 -D__ANDROID_API__=$(A_API)
+	else ifeq "$(OS)" "windows"
+		CONFIGURE_FLAGS := mingw64
+	endif
+else ifeq "$(CPU)" "arm64"
+	ifeq "$(SYS)" "android"
+		CONFIGURE_FLAGS := android-arm64 -D__ANDROID_API__=$(A_API)
+	endif
 endif
 ifneq "$(CROSS_PREFIX)" ""
 	CONFIGURE_FLAGS += --cross-compile-prefix=$(CROSS_PREFIX)
@@ -42,9 +52,12 @@ $(LIB): $(DIR)/Makefile
 ifeq "$(OS)" "windows"
 	cd $(DIR) && $(STRIP) libcrypto-3-x64.dll libssl-3-x64.dll
 	cd $(DIR) && mv libcrypto-3-x64.dll libssl-3-x64.dll ..
-else
+else ifeq "$(SYS)" "linux"
 	cd $(DIR) && ln -s libssl.so.3 libssl.so
 	cd $(DIR) && ln -s libcrypto.so.3 libcrypto.so
 	cd $(DIR) && $(STRIP) libcrypto.so.3 libssl.so.3
 	cd $(DIR) && mv libcrypto.so libssl.so libcrypto.so.3 libssl.so.3 ..
+else
+	cd $(DIR) && $(STRIP) libcrypto.so libssl.so
+	cd $(DIR) && mv libcrypto.so libssl.so ..
 endif
