@@ -2,7 +2,7 @@
 
 MODS += ssl.$(SO)
 CFLAGS_OPENSSL := $(CFLAGS) -Wno-deprecated-declarations \
-	-I$(NETMILL)/3pt/openssl/openssl-3.1.3/include
+	-I$(NETMILL)/3pt/_$(OS)-$(CPU)/openssl-3.1.3/include
 SSL_LINKFLAGS := $(LINKFLAGS)
 ifeq "$(OS)" "linux"
 	SSL_LINKFLAGS += -L$(NETMILL)/3pt/_$(OS)-$(CPU) -lssl -lcrypto

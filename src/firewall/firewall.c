@@ -28,6 +28,7 @@ do { \
 
 #define R_DONE  100
 #define R_BADVAL  101
+#define R_ERR  102
 
 static int fw_help()
 {
@@ -326,18 +327,18 @@ static int fw_conf_check(struct firewall_conf *c)
 {
 	if (!c->if_index) {
 		ERR("Please specify interface");
-		return R_BADVAL;
+		return R_ERR;
 	}
 
 	if (!c->rule.ip_proto) {
 		ERR("Please specify ip_proto");
-		return R_BADVAL;
+		return R_ERR;
 	}
 
 	if ((c->rule.l4_src_port || c->rule.l4_dst_port)
 		&& !(c->rule.ip_proto == FFIP_UDP || c->rule.ip_proto == FFIP_TCP)) {
 		ERR("l4_src_port and l4_dst_port are for UDP or TCP only");
-		return R_BADVAL;
+		return R_ERR;
 	}
 
 	*ffslice_lastT(&c->rules, struct firewall_rule) = c->rule;

@@ -37,7 +37,7 @@ Algorithm:
 SEC("prog")
 int nml_fw(struct xdp_md *ctx)
 {
-	const void *data = (char*)(long)ctx->data;
+	const void *data = (void*)(long)ctx->data;
 	const void *data_end = (void*)(long)ctx->data_end;
 
 	struct nml_fw_stats *stats;
@@ -85,10 +85,11 @@ int nml_fw(struct xdp_md *ctx)
 		if (!(mask = bpf_map_lookup_elem(&nml_fw_mask_map, &k)))
 			break;
 
-		*(__u64*)&k_rule &= *(__u64*)mask;
+		struct nml_fw_rule k_rule2;
+		*(__u64*)&k_rule2 = *(__u64*)&k_rule & *(__u64*)mask;
 
-		struct nml_fw_rule *rule;
-		if ((rule = bpf_map_lookup_elem(&nml_fw_rule_map, &k_rule)))
+		__u8 *rule;
+		if ((rule = bpf_map_lookup_elem(&nml_fw_rule_map, &k_rule2)))
 			goto match;
 	}
 
@@ -109,7 +110,7 @@ match:
 	if ((stats = bpf_map_lookup_elem(&nml_fw_stats_map, &key)))
 		stats->matched++;
 	}
-    return bpf_redirect_map(&nml_fw_xsk_map, ctx->rx_queue_index, 0);
+	return bpf_redirect_map(&nml_fw_xsk_map, ctx->rx_queue_index, 0);
 }
 
 char _license[] SEC("license") = "GPL";

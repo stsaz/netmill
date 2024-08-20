@@ -60,6 +60,9 @@ make -j8 \
  -f ../Makefile \
  -I ..
 
+make -j8 bpf xdp \
+ -C 3pt
+
 mkdir -p _linux-amd64
 make -j8 \
  -C _linux-amd64 \

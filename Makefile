@@ -54,7 +54,7 @@ endif
 include $(NETMILL)/src/core/Makefile
 include $(NETMILL)/src/dns-server/Makefile
 include $(NETMILL)/src/exe/Makefile
-# include $(NETMILL)/src/firewall/Makefile
+include $(NETMILL)/src/firewall/Makefile
 include $(NETMILL)/src/gzip/Makefile
 include $(NETMILL)/src/http-client/Makefile
 include $(NETMILL)/src/http-server/Makefile

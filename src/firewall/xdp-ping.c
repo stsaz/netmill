@@ -28,6 +28,7 @@ do { \
 
 #define R_DONE  100
 #define R_BADVAL  101
+#define R_ERR  102
 
 static int xping_help()
 {
@@ -348,13 +349,13 @@ static int xping_conf_check(struct xping_conf *c)
 {
 	if (!c->if_index) {
 		ERR("Please specify interface");
-		return R_BADVAL;
+		return R_ERR;
 	}
 
 	if (!c->hwsrc.len || !c->hwdst.len
 		|| !c->src.len || !c->dst.len) {
 		ERR("Please specify hwsrc, hwdst, src and dst");
-		return R_BADVAL;
+		return R_ERR;
 	}
 
 	if (eth_parse(c->hw_src, c->hwsrc.ptr, c->hwsrc.len)
@@ -362,12 +363,12 @@ static int xping_conf_check(struct xping_conf *c)
 		|| ffip4_parse((ffip4*)c->ip_src, c->src.ptr, c->src.len)
 		|| ffip4_parse((ffip4*)c->ip_dst, c->dst.ptr, c->dst.len)) {
 		ERR("Incorrect hwsrc, hwdst, src or dst");
-		return R_BADVAL;
+		return R_ERR;
 	}
 
 	if (c->burst_size == 0 || c->burst_size > 256) {
 		ERR("Too large burst size");
-		return R_BADVAL;
+		return R_ERR;
 	}
 
 	return 0;
@@ -384,7 +385,7 @@ static int xping_interface(struct xping_conf *c, ffstr name)
 }
 
 #define O(m)  (void*)(size_t)FF_OFF(struct xping_conf, m)
-static const struct ffarg firewall_args[] = {
+static const struct ffarg ping_args[] = {
 	{ "burst",		'u',	O(burst_size) },
 	{ "dst",		'S',	O(dst) },
 	{ "help",		'1',	xping_help },
@@ -411,7 +412,7 @@ static nml_op* xping_create(char **argv)
 	}
 
 	struct ffargs as = {};
-	int r = ffargs_process_argv(&as, firewall_args, &x->conf, FFARGS_O_PARTIAL | FFARGS_O_DUPLICATES, argv, n);
+	int r = ffargs_process_argv(&as, ping_args, &x->conf, FFARGS_O_PARTIAL | FFARGS_O_DUPLICATES, argv, n);
 	if (r) {
 		if (r == R_DONE)
 		{}

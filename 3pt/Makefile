@@ -19,7 +19,7 @@ libbpf:
 
 libbpf/src/libbpf.so: libbpf
 	cd libbpf/src && \
-		VERBOSE=1 make -j8 AR=ar
+		VERBOSE=1 $(MAKE) AR=ar
 
 bpf: libbpf/src/libbpf.so
 
@@ -32,7 +32,7 @@ xdp-tools/lib/libxdp/libxdp.a: libbpf xdp-tools
 	cp -au libbpf/src/*.h \
 		xdp-tools/headers/bpf
 	cd xdp-tools/lib/libxdp && \
-		VERBOSE=1 make -j8 staticobjs/libxdp.o staticobjs/xsk.o \
+		VERBOSE=1 $(MAKE) staticobjs/libxdp.o staticobjs/xsk.o \
 			STATIC_CFLAGS='-DLIBXDP_STATIC=1 -fPIC' && \
 		$(AR) rcs libxdp.a \
 			staticobjs/libxdp.o staticobjs/xsk.o
