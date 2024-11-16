@@ -90,6 +90,7 @@ static int hc_conn_cache_process(nml_http_client *c)
 	struct http_cl_conn_cache_ent *ce = (void*)data.ptr;
 	c->sk = ce->sk;
 	c->ssl.conn = ce->ssl_conn;
+	c->conf->core.kev_free(c->conf->boss, c->kev);
 	c->kev = ce->kev;
 	c->kev->obj = c;
 	c->connection_from_cache = 1;
