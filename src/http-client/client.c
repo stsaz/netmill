@@ -35,6 +35,17 @@ static void hc_conf_init(struct nml_http_client_conf *conf)
 
 void nml_http_client_run(nml_http_client *c);
 
+static int hc_kev_create(nml_http_client *c)
+{
+	if (!(c->kev = c->conf->core.kev_new(c->conf->boss)))
+		return -1;
+	c->kev->rhandler = (void*)nml_http_client_run;
+	c->kev->whandler = (void*)nml_http_client_run;
+	c->kev->kcall.handler = (void*)nml_http_client_run;
+	c->kev->kcall.param = c;
+	return 0;
+}
+
 int nml_http_client_conf(nml_http_client *c, struct nml_http_client_conf *conf)
 {
 	if (!c) {
@@ -50,12 +61,8 @@ int nml_http_client_conf(nml_http_client *c, struct nml_http_client_conf *conf)
 
 	c->wake = (void*)nml_http_client_run;
 
-	if (!(c->kev = conf->core.kev_new(conf->boss)))
+	if (hc_kev_create(c))
 		return -1;
-	c->kev->rhandler = (void*)nml_http_client_run;
-	c->kev->whandler = (void*)nml_http_client_run;
-	c->kev->kcall.handler = (void*)nml_http_client_run;
-	c->kev->kcall.param = c;
 
 	conveyor_init(&c->conveyor, (const nml_component**)conf->chain);
 
@@ -183,6 +190,12 @@ void nml_http_client_run(nml_http_client *c)
 			conveyor_reset(&c->conveyor);
 			c->chain_reset = 0;
 			c->chain_going_back = 0;
+
+			if (!c->kev)  {
+				if (hc_kev_create(c)) // create new, because the old one was probably cached by 'connection-cache'
+					goto end;
+			}
+
 			i = 0;
 			break;
 

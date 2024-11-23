@@ -34,6 +34,10 @@ struct url_ctx {
 	struct url_conf conf;
 	struct nml_wrk *w;
 	nml_http_client *hc;
+
+	const struct nml_cache_if *cif;
+	nml_cache_ctx *conn_cache;
+
 	nml_task task;
 	fffd fd;
 };
@@ -175,6 +179,7 @@ static const nml_http_cl_component** url_chain(const nml_exe *exe, uint ssl)
 
 	static const struct comp_name plain_names[] = {
 		{"", &nml_http_cl_resolve},
+		{"", &nml_http_cl_connection_cache},
 		{"", &nml_http_cl_connect},
 		{"", &nml_http_cl_request},
 		{"", &nml_http_cl_send},
@@ -190,6 +195,7 @@ static const nml_http_cl_component** url_chain(const nml_exe *exe, uint ssl)
 
 	static const struct comp_name ssl_names[] = {
 		{"", &nml_http_cl_resolve},
+		{"", &nml_http_cl_connection_cache},
 		{"", &nml_http_cl_connect},
 		{"ssl.htcl_recv", NULL},
 		{"ssl.htcl_handshake", NULL},
@@ -226,6 +232,27 @@ static const nml_http_cl_component** url_chain(const nml_exe *exe, uint ssl)
 	*pc++ = NULL;
 	return c;
 };
+
+static nml_cache_ctx* conn_cache_new()
+{
+	struct nml_cache_conf *cc = ffmem_new(struct nml_cache_conf);
+	ux->cif->conf(NULL, cc);
+
+	cc->log_level = exe->log_level;
+	cc->log_obj = NULL;
+	cc->log = exe->log;
+
+	cc->max_items = 1;
+	cc->ttl_sec = 30;
+	cc->destroy = nml_http_cl_conn_cache_destroy;
+	cc->opaque = NULL;
+
+	nml_cache_ctx *cx = ux->cif->create();
+	if (!cx)
+		return NULL;
+	ux->cif->conf(cx, cc);
+	return cx;
+}
 
 static int ssl_prepare()
 {
@@ -281,9 +308,15 @@ static int url_setup(struct url_ctx *ux)
 	if (ffsock_init(FFSOCK_INIT_SIGPIPE | FFSOCK_INIT_WSA | FFSOCK_INIT_WSAFUNCS))
 		return -1;
 
+	struct nml_http_client_conf *hcc = &ux->conf.hcc;
 	ux->conf.hcc.log_level = exe->log_level;
 	ux->conf.hcc.log_obj = NULL;
 	ux->conf.hcc.log = exe->log;
+
+	ux->cif = exe->provide("core.cache");
+	ux->conn_cache = conn_cache_new();
+	hcc->connect.cache = ux->conn_cache;
+	hcc->connect.cif = ux->cif;
 
 	if (ux->conf.https) {
 		if (ssl_prepare())
@@ -306,7 +339,7 @@ static int url_setup(struct url_ctx *ux)
 		.log_date_buffer = exe->log_date_buffer,
 
 		.events_num = 1,
-		.max_connections = 1,
+		.max_connections = 2,
 		.timer_interval_msec = 100,
 	};
 	if (ux->wif->conf(ux->w, &wc))
@@ -372,6 +405,8 @@ static void url_close(nml_op *op)
 		ux->wif->free(ux->conf.hcc.boss);
 	if (ux->conf.hcc.slif)
 		ux->conf.hcc.slif->uninit(ux->conf.hcc.ssl_ctx);
+	if (ux->cif)
+		ux->cif->destroy(ux->conn_cache);
 	ffmem_free(ux);
 }
 

@@ -97,6 +97,18 @@ bad request
 
 EOF
 
+	echo '### Redirect'
+	cat <<EOF | nc -l 127.0.0.1 -p 8081 &
+HTTP/1.1 302 Found
+Connection: close
+Location: http://localhost:8080/README.md
+
+EOF
+	sleep .5
+	./netmill req 127.0.0.1:8081/README.md -o nmltest/README.md
+	diff README.md nmltest/README.md
+	rm nmltest/README.md
+
 	test_interrupt_pid__filename nml.pid
 	sleep .5
 
