@@ -9,10 +9,19 @@ nml_http_client* nml_http_client_create()
 	return c;
 }
 
+static void hc_err_log(nml_http_client *c)
+{
+	switch (c->error) {
+	case NML_HC_E_REDIRECT:
+		HC_ERR(c, "switching between HTTP and HTTPS isn't supported");  break;
+	}
+}
+
 void nml_http_client_free(nml_http_client *c)
 {
 	if (!c) return;
 
+	hc_err_log(c);
 	HC_DEBUG(c, "closing outbound client context");
 	conveyor_close(&c->conveyor, c);
 	c->conf->core.kev_free(c->conf->boss, c->kev);

@@ -37,7 +37,7 @@ static int hc_redir_process(nml_http_client *c)
 
 	if (ffstr_eqz(&p.scheme, "http://")) {
 		if (c->conf->ssl_ctx) {
-			HC_ERR(c, "auto-switching to plain HTTP isn't supported yet");
+			c->error = NML_HC_E_REDIRECT;
 			return NMLR_ERR;
 		}
 
@@ -46,7 +46,7 @@ static int hc_redir_process(nml_http_client *c)
 			c->conf->server_port = 443; // 'resolve' defaults to 80: override it for https
 
 		if (!c->conf->ssl_ctx) {
-			HC_ERR(c, "auto-switching to secure HTTP isn't supported yet");
+			c->error = NML_HC_E_REDIRECT;
 			return NMLR_ERR;
 		}
 

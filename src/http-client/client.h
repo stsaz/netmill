@@ -44,6 +44,11 @@ do { \
 	} while (0)
 #endif
 
+enum NML_HTTP_CLIENT_ERR {
+	NML_HC_E_OTHER = 1,
+	NML_HC_E_REDIRECT = 2, // can't perform redirection
+};
+
 typedef struct z_ctx z_ctx;
 struct nml_http_client {
 	struct nml_http_client_conf *conf;
@@ -81,6 +86,7 @@ struct nml_http_client {
 	uint w_pending :1;
 	uint io_connect_result_passed :1;
 	uint ssl_handshake_logged :1;
+	uint error; // enum NML_HTTP_CLIENT_ERR
 
 	struct {
 		char *hostname;
