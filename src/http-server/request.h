@@ -87,6 +87,7 @@ static int hs_req_parse(nml_http_sv_conn *c)
 	if (req.ptr[r-2] == '\r')
 		c->req.line.len--;
 	ffstr_shift(&req, r);
+	c->req.headers.off = req.ptr - buf;
 
 	ffstr name = {}, val = {};
 	for (;;) {
@@ -142,6 +143,7 @@ static int hs_req_parse(nml_http_sv_conn *c)
 	HS_DEBUG(c, "request: [%u] %*s", (int)(req.ptr - buf), req.ptr - buf, buf);
 
 	range16_set(&c->req.full, 0, req.ptr - buf);
+	c->req.headers.len = req.ptr - buf - c->req.headers.off;
 
 	c->resp_connection_keepalive = (proto.ptr[7] == '1');
 	if (ka > 0)

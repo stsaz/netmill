@@ -60,13 +60,7 @@ static int hs_proxy_open(nml_http_sv_conn *c)
 		cc->method = HS_REQUEST_DATA(c, c->req.method);
 		cc->path = HS_REQUEST_DATA(c, c->req.path);
 		cc->path.len = c->req.url.off + c->req.url.len - c->req.path.off;
-
-		ffstr h = HS_REQUEST_DATA(c, c->req.full);
-		ffstr_shift(&h, c->req.line.len + 1);
-		if (h.ptr[0] == '\n')
-			ffstr_shift(&h, 1);
-		cc->headers = h;
-
+		cc->headers = HS_REQUEST_DATA(c, c->req.headers);
 		cc->chain = htsv_http_cl_chain;
 	}
 

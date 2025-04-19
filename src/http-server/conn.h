@@ -86,7 +86,7 @@ struct nml_http_sv_conn {
 	} recv;
 
 	struct {
-		range16 full, line, method, url, path, querystr, host, if_modified_since, accept_encoding,
+		range16 full, line, method, url, path, querystr, headers, host, if_modified_since, accept_encoding,
 			user_agent;
 		ffstr unescaped_path;
 	} req;

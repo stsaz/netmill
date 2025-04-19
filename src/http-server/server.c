@@ -58,8 +58,6 @@ static void sv_conf_init(struct nml_http_server_conf *conf)
 	conf->log_level = NML_LOG_INFO;
 	conf->log = sv_log;
 
-	conf->core = conf->core;
-
 	static struct nml_address a[2];
 	a[0].port = 80;
 	conf->server.listen_addresses = a;
