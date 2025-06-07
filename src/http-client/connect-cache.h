@@ -73,6 +73,9 @@ fail:
 
 	// we own the socket
 	c->conf->connect.cif->free(c->conf->connect.cache, c->connect.cache_data);
+	c->sk = FFSOCK_NULL;
+	c->ssl.conn = NULL;
+	c->kev = NULL;
 }
 
 static int hc_conn_cache_process(nml_http_client *c)
