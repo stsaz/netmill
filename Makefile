@@ -76,7 +76,7 @@ if.$(SO): nif.o
 ifeq "$(TARGETS)" ""
 override TARGETS := core.$(SO) $(EXE) $(MODS)
 endif
-build: $(TARGETS)
+build: $(TARGETS) $(MODS_BPF)
 
 strip-debug: $(addsuffix .debug,$(TARGETS))
 %.debug: %
@@ -95,7 +95,7 @@ app:
 		$(APP_DIR)
 
 	mkdir -p $(APP_DIR)/ops
-	cp -ru $(MODS) \
+	cp -ru $(MODS) $(MODS_BPF) \
 		$(APP_DIR)/ops
 ifneq "$(LIBS3)" ""
 	cp -ru $(LIBS3) \

@@ -17,13 +17,14 @@ cd netmill
 * Cross-Build on Linux for Debian-bookworm:
 
 	```sh
-	bash xbuild-debianbookworm.sh
+	bash xbuild.sh
 	```
 
 * Cross-Build on Linux for Windows:
 
 	```sh
-	bash xbuild-win64.sh
+	OS=windows \
+		bash xbuild.sh
 	```
 
 * Cross-Build on Linux for Alpine:

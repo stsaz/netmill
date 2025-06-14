@@ -2,8 +2,8 @@
 
 ifeq "$(OS)" "linux"
 ifneq "$(BINDIR)" "_linux-musl-amd64"
-MODS += firewall.$(SO) \
-	nmlfw-xdp-ebpf.o
+MODS += firewall.$(SO)
+MODS_BPF := nmlfw-xdp-ebpf.o
 endif
 endif
 LIBXDP := $(NETMILL)/3pt/xdp-tools

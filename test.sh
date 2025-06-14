@@ -183,7 +183,7 @@ test_http_proxy() {
 
 	echo '### Chunked response from upstream'
 
-	cat <<EOF | nc -l 127.0.0.1 8080 &
+	cat <<EOF | nc -l 127.0.0.1 -p 8080 &
 HTTP/1.1 200 OK UPSTREAM
 Server: upstream
 Transfer-Encoding: chunked
@@ -338,6 +338,8 @@ test_clean() {
 
 mkdir -p nmltest
 rm -rf nmltest/*
+killall -9 netmill || true
+killall -9 nc || true
 
 for cmd in "${CMDS[@]}" ; do
 
