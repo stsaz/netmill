@@ -105,6 +105,7 @@ enum FFDNS_TYPE {
 	FFDNS_PTR = 12, // for ip=1.2.3.4 ques.name = 4.3.2.1.in-addr.arpa
 	FFDNS_AAAA = 28,
 	FFDNS_OPT = 41, // EDNS
+	FFDNS_HTTPS = 65,
 };
 
 enum FFDNS_CLASS {

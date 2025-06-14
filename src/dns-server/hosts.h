@@ -356,6 +356,9 @@ static int ds_hosts_find(struct nml_dns_server_conf *conf, const ffdns_question 
 		const struct entry_ip *ent_ip = (struct entry_ip*)ent;
 		ffmem_copy(ip, ent_ip->ip, 16);
 		t = T_IPV6;
+
+	} else if (!subdomain_match && ent->type != T_PASS) {
+		t = T_BLOCK;
 	}
 
 	if (t == 0) {

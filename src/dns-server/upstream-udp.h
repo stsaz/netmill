@@ -266,7 +266,7 @@ static void dsu_log(struct dns_udp_u *u, nml_dns_sv_conn *c, const struct dns_ms
 {
 	struct nml_dns_server_conf *conf = u->conf;
 	fftime now = {};
-	if (!c) {
+	if (c) {
 		now = fftime_monotonic();
 		fftime_sub(&now, &c->tstart);
 	}
