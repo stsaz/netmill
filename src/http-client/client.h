@@ -132,7 +132,7 @@ struct nml_http_client {
 	struct {
 		uint64 content_length;
 		uint code;
-		range16 whole, status, msg, headers, content_type, content_encoding, location;
+		range16 whole, status, msg, headers, content_type, content_range, content_encoding, location;
 		char *base;
 	} response;
 

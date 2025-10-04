@@ -56,6 +56,9 @@ static int hc_resp_process(nml_http_client *c)
 			} else if (ffstr_ieqcz(&name, "Content-Type")) {
 				range16_set(&c->response.content_type, val.ptr - base, val.len);
 
+			} else if (ffstr_ieqcz(&name, "Content-Range")) {
+				range16_set(&c->response.content_range, val.ptr - base, val.len);
+
 			} else if (ffstr_ieqcz(&name, "Content-Length")) {
 				if (have_content_length) {
 					HC_ERR(c, "duplicate Content-Length");

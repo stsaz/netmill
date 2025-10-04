@@ -38,8 +38,8 @@ static void hc_conn_cache_close(nml_http_client *c)
 {
 	if (c->sk == FFSOCK_NULL) return;
 
-	if (!c->response.code) {
-		HC_DEBUG(c, "no valid response from server");
+	if (!c->resp_complete) {
+		HC_DEBUG(c, "response from server is incomplete");
 		goto fail;
 	}
 

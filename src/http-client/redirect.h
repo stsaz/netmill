@@ -5,7 +5,10 @@
 
 static int hc_redir_open(nml_http_client *c)
 {
-	if ((c->response.code == 301 || c->response.code == 302)
+	if ((c->response.code == 301 /*Moved Permanently*/
+			|| c->response.code == 302 /*Found*/
+			|| c->response.code == 307 /*Temporary Redirect*/
+			|| c->response.code == 308 /*Permanent Redirect*/)
 		&& c->response.location.len
 		&& c->redirect_n != c->conf->max_redirect)
 		return NMLR_OPEN;

@@ -6,6 +6,7 @@
 http_req_parse http_req_write
 http_resp_parse http_resp_write
 http_hdr_parse http_hdr_write
+http_range_parse http_range_write
 httpchunked_parse httpchunked_write
 httpurl_escape httpurl_unescape
 httpurl_split
@@ -51,6 +52,36 @@ Example HTTP request via HTTP proxy:
 Example HTTPS request via HTTP proxy:
 	CONNECT HOST:443 HTTP/1.1
 	Host: HOST:443
+
+Partial content example:
+
+	GET ...
+	Range: bytes=0-3
+
+	HTTP/1.1 206 Partial Content
+	Content-Range: bytes 0-3/8
+
+	DATA
+
+Multi-range partial content example:
+
+	GET ...
+	Range: bytes=0-3, 4-7
+
+	HTTP/1.1 206 Partial Content
+	Content-Type: multipart/byteranges; boundary=abcd
+
+	--abcd
+	Content-Type: text/plain
+	Content-Range: bytes 0-3/8
+
+	DATA
+	--abcd
+	Content-Type: text/plain
+	Content-Range: bytes 4-7/8
+
+	DATA
+	--abcd--
 */
 
 #pragma once
@@ -310,6 +341,68 @@ static inline int http_hdr_write(char *buf, ffsize cap, ffstr name, ffstr val)
 	*p++ = '\r';
 	*p = '\n';
 	return n;
+}
+
+
+/** Parse Content-Range value, e.g.:
+ "bytes 0-3/7"
+*/
+static inline int http_range_parse(ffstr data, ffint64 *first, ffint64 *last, ffint64 *total)
+{
+	const char *d = data.ptr, *end = data.ptr + data.len;
+
+	if (!(d + 6 < end
+		&& !ffmem_cmp(d, "bytes ", 6)))
+		return -1;
+	d += 6;
+
+	int r = ffs_toint(d, end - d, first, FFS_INT64);
+	if (!(r > 0 && d + r < end && d[r] == '-'))
+		return -1;
+	d += r + 1;
+
+	r = ffs_toint(d, end - d, last, FFS_INT64);
+	if (!(r > 0 && d + r < end && d[r] == '/'))
+		return -1;
+	d += r + 1;
+
+	if (d + 1 == end && *d == '*') {
+		*total = -1;
+
+	} else {
+		r = ffs_toint(d, end - d, total, FFS_INT64);
+		if (!(r > 0 && d + r == end))
+			return -1;
+	}
+
+	return 0;
+}
+
+/** Write Range header value, e.g.:
+ "Range: bytes=[first]-[last] CRLF"
+Return N of bytes written
+ 0 if not enough space or invalid range */
+static inline int http_range_write(char *buf, ffsize cap, ffint64 first, ffint64 last)
+{
+	char *p = buf, *end = buf + cap;
+	p += ffmem_ncopy(buf, end - buf, "Range: bytes=", 13);
+
+	if (first >= 0)
+		p += ffs_from_uint_10(first, p, end - p);
+
+	if (p != end)
+		*p++ = '-';
+
+	if (last >= 0)
+		p += ffs_from_uint_10(last, p, end - p);
+
+	if ((first < 0 && last < 0)
+		|| p + 2 > end)
+		return 0;
+
+	*p++ = '\r';
+	*p++ = '\n';
+	return p - buf;
 }
 
 
