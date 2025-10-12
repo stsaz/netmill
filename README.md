@@ -240,7 +240,7 @@ netmill ping interface eth1 \
 
 ```sh
 # Generate RSA key and X509 certificate PEM file
-netmill cert \
+netmill cert generate \
  bits 2048 \
  subject "/CN=hostname" \
  until "2030-01-01 00:00:00" \

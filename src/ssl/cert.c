@@ -33,6 +33,7 @@ int cert_pem_create(const char *fn, uint pkey_bits, struct ffssl_cert_newinfo *c
 	ffstr kbuf = {}, cbuf = {};
 	ffssl_key *k = NULL;
 	ffssl_cert *c = NULL;
+	char e[1000];
 
 	if (ffssl_key_create(&k, pkey_bits, FFSSL_PKEY_RSA))
 		goto end;
@@ -42,8 +43,10 @@ int cert_pem_create(const char *fn, uint pkey_bits, struct ffssl_cert_newinfo *c
 	fftime t;
 	fftime_now(&t);
 	ci->pkey = k;
-	if (ffssl_cert_create(&c, ci))
+	if (ffssl_cert_create(&c, ci)) {
+		CT_ERR("ffssl_cert_create: %s", ffssl_error(0, e, sizeof(e)));
 		goto end;
+	}
 	if (ffssl_cert_print(c, &cbuf))
 		goto end;
 

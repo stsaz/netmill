@@ -781,7 +781,7 @@ int ffssl_cert_create(X509 **px509, struct ffssl_cert_newinfo *info)
 	}
 	if (!X509_set_issuer_name(x509, iss_name))
 		goto end;
-	if (!X509_sign(x509, iss_pk, EVP_sha1()))
+	if (!X509_sign(x509, iss_pk, EVP_sha256()))
 		goto end;
 	*px509 = x509;
 	r = 0;
