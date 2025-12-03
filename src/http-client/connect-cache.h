@@ -36,7 +36,9 @@ static int hc_conn_cache_open(nml_http_client *c)
 
 static void hc_conn_cache_close(nml_http_client *c)
 {
-	if (c->sk == FFSOCK_NULL) return;
+	if (c->sk == FFSOCK_NULL
+		|| c->connection_close)
+		return;
 
 	if (!c->resp_complete) {
 		HC_DEBUG(c, "response from server is incomplete");
