@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<color name="colorPrimary">#552b80</color>
+	<color name="colorPrimaryDark">#552b80</color>
+	<color name="colorAccent">#aa55ff</color>
+	<color name="background">#303132</color>
+	<color name="list_text">#eeeeee</color>
+	<color name="list_row_pressed">#552b80</color>
+	<color name="text">#eeeeee</color>
+	<color name="sett_group">#aa55ff</color>
+</resources>

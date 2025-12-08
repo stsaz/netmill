@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent"
+	android:fitsSystemWindows="true"
+	tools:context=".SettingsActivity">
+
+	<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+		xmlns:app="http://schemas.android.com/apk/res-auto"
+		xmlns:tools="http://schemas.android.com/tools"
+		android:layout_width="match_parent"
+		android:layout_height="match_parent"
+		tools:context=".SettingsActivity"
+		tools:showIn="@layout/activity_settings">
+
+		<LinearLayout
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:focusableInTouchMode="true"
+			android:orientation="vertical">
+
+			<TextView android:text="@string/conf_e_http_port"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:layout_marginHorizontal="10dp"
+				android:layout_marginTop="10dp"
+				android:textColor="@color/text" />
+			<EditText android:id="@+id/e_http_port"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:layout_marginHorizontal="10dp"
+				android:inputType="text"
+				android:textSize="@dimen/text_editbox" />
+
+			<androidx.appcompat.widget.SwitchCompat android:id="@+id/sw_http_local"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:layout_margin="10dp"
+				android:text="@string/conf_sw_http_local" />
+
+			<TextView android:text="@string/conf_e_http_local_path"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:layout_marginHorizontal="10dp"
+				android:layout_marginTop="10dp"
+				android:textColor="@color/text" />
+			<EditText android:id="@+id/e_http_local_path"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:layout_marginHorizontal="10dp"
+				android:inputType="text"
+				android:textSize="@dimen/text_editbox" />
+
+		</LinearLayout>
+
+	</androidx.core.widget.NestedScrollView>
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

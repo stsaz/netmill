@@ -1,0 +1,12 @@
+<resources>
+	<string name="app_name">netmill</string>
+	<string name="action_settings">Settings</string>
+	<string name="b_start">Start HTTP Server</string>
+
+	<string name="title_activity_settings">Settings</string>
+	<string name="conf_e_http_port">HTTP: port</string>
+	<string name="conf_sw_http_local">HTTP: serve local files</string>
+	<string name="conf_e_http_local_path">HTTP: local path</string>
+
+	<string name="menu_about">About</string>
+</resources>
