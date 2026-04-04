@@ -2,6 +2,7 @@
 2023, Simon Zolin */
 
 #include <http-client/client.h>
+#include <netmill-dns.h>
 #include <dns-server/upstream-doh-data.h>
 #include <util/ipaddr.h>
 

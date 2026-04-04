@@ -2,7 +2,7 @@
 2023, Simon Zolin */
 
 #pragma once
-#include <netmill.h>
+#include <netmill-dns.h>
 #include <util/ipaddr.h>
 #include <util/dns.h>
 #include <util/conveyor-static.h>

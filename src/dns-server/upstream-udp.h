@@ -198,8 +198,8 @@ static int dsu_request(struct dns_udp_u *u, nml_dns_sv_conn *c)
 		DSU_SYSERR(u, "%S: ffsock_send", &u->id);
 		return -1;
 	}
-	c->conf->upstreams.out_data += r;
-	c->conf->upstreams.out_reqs++;
+	c->conf->stat.upstreams.out_data += r;
+	c->conf->stat.upstreams.out_reqs++;
 
 	DSU_DEBUG(u, "%S: sent request %S (%u) %LB"
 		, &u->id, &c->req.q.name, c->req.h.id, c->reqbuf.len);
@@ -276,8 +276,8 @@ static void dsu_log(struct dns_udp_u *u, nml_dns_sv_conn *c, const struct dns_ms
 		, resp->h.answers, resp->h.nss, resp->h.additionals
 		, resp->data.len
 		, msec
-		, conf->upstreams.in_msgs, conf->upstreams.in_data
-		, conf->upstreams.out_reqs, conf->upstreams.out_data);
+		, conf->stat.upstreams.in_msgs, conf->stat.upstreams.in_data
+		, conf->stat.upstreams.out_reqs, conf->stat.upstreams.out_data);
 }
 
 /*
@@ -293,8 +293,8 @@ static int dsu_read_process(struct dns_udp_u *u)
 			DSU_SYSWARN(u, "ffsock_recv");
 		return -1;
 	}
-	conf->upstreams.in_data += r;
-	conf->upstreams.in_msgs++;
+	conf->stat.upstreams.in_data += r;
+	conf->stat.upstreams.in_msgs++;
 	ffstr_set(&resp.data, u->buf.ptr, r);
 	DSU_DEBUG(u, "received %u bytes", r);
 

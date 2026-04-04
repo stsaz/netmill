@@ -6,7 +6,9 @@
 #include <util/ethernet.h>
 #include <ffsys/netconf.h>
 #include <ffsys/std.h>
+#ifndef FF_ANDROID
 #include <ffsys/globals.h>
+#endif
 
 const nml_exe *exe;
 #define IF_ERR(i, ...) \

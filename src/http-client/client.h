@@ -2,7 +2,7 @@
 2023, Simon Zolin */
 
 #pragma once
-#include <netmill.h>
+#include <netmill-http.h>
 #include <util/kq.h>
 #include <util/range.h>
 #include <util/http1.h>

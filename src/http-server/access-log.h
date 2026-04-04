@@ -4,7 +4,7 @@
 #include <http-server/conn.h>
 #include <util/ipaddr.h>
 
-/* CLIENT_IP REQ_TOTAL "METHOD PATH VER" RESP_TOTAL "VER CODE MSG" REALTIME */
+/* CLIENT_IP DATE "METHOD PATH VER" RESP_CODE REQ_TOTAL RESP_TOTAL REALTIME */
 static int hs_accesslog_open(nml_http_sv_conn *c)
 {
 	ffstr dts;

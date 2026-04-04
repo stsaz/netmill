@@ -27,22 +27,14 @@ static const char nmlf_r_str[][11] = {
 static int ds_conveyor_component_call(nml_dns_sv_conn *c, uint i)
 {
 	struct nml_conveyor *v = &c->conveyor;
-	const nml_dns_component *f = (nml_dns_component*)v->comps[i];
 	int r;
 
-	if (!CONVEYOR_OPENED_TEST(v, i)) {
-		DS_EXTRALOG(c, "f#%u '%s': opening", i, f->name);
-		r = f->open(c);
-		(void)nmlf_r_str;
-		DS_EXTRALOG(c, "  f#%u '%s': %s", i, f->name, nmlf_r_str[r]);
-		if (r != NMLR_OPEN)
-			return r;
-		CONVEYOR_OPENED_SET(v, i);
-	}
+	if (NMLR_OPEN != (r = conveyor_open_once(v, i, c, nmlf_r_str)))
+		return r;
 
-	DS_EXTRALOG(c, "f#%u '%s': input:%L", i, f->name, c->input.len);
-	r = f->process(c);
-	DS_EXTRALOG(c, "  f#%u '%s': %s  output:%L", i, f->name, nmlf_r_str[r], c->output.len);
+	DS_EXTRALOG(c, "f#%u '%s': input:%L", i, v->comps[i]->name, c->input.len);
+	r = v->process[i](c);
+	DS_EXTRALOG(c, "  f#%u '%s': %s  output:%L", i, v->comps[i]->name, nmlf_r_str[r], c->output.len);
 	return r;
 }
 
@@ -66,24 +58,14 @@ void ds_run(nml_dns_sv_conn *c)
 			c->output = c->input;
 			// fallthrough
 		case NMLR_DONE:
-			CONVEYOR_DONE_SET(v, i);
-			v->active--;
-			v->empty_data_counter = 0;
-			DS_EXTRALOG(c, "chain: %u", v->active);
+			conveyor_done(v, i);
 			// fallthrough
 
 		case NMLR_FWD:
-			if (!CONVEYOR_DONE_TEST(v, i)) {
-				if (!c->output.len) {
-					if (v->empty_data_counter > v->active * 2) {
-						DS_ERR(c, "detected chain processing loop");
-						FF_ASSERT(0);
-						goto end;
-					}
-					v->empty_data_counter++;
-				} else {
-					v->empty_data_counter = 0;
-				}
+			if (conveyor_fwd(v, i, c->output.len)) {
+				DS_ERR(c, "detected chain processing loop");
+				FF_ASSERT(0);
+				goto end;
 			}
 
 			c->input = c->output;

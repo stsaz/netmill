@@ -77,26 +77,28 @@ public class MainActivity extends AppCompatActivity {
 	private static final int REQUEST_PERM_READ_STORAGE = 1;
 	private static final int REQUEST_STORAGE_ACCESS = 1;
 
-	/** Request system permissions */
-	private void init_system() {
-		String[] perms = new String[]{
-			Manifest.permission.READ_EXTERNAL_STORAGE,
-			Manifest.permission.WRITE_EXTERNAL_STORAGE,
-		};
+	private void sys_permisson_request(AppCompatActivity activity, String[] perms, boolean externalStorageManager) {
 		for (String p : perms) {
-			if (ActivityCompat.checkSelfPermission(this, p) != PackageManager.PERMISSION_GRANTED) {
-				ActivityCompat.requestPermissions(this, perms, REQUEST_PERM_READ_STORAGE);
+			if (ActivityCompat.checkSelfPermission(activity, p) != PackageManager.PERMISSION_GRANTED) {
+				ActivityCompat.requestPermissions(activity, perms, REQUEST_PERM_READ_STORAGE);
 				break;
 			}
 		}
 
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-			if (!Environment.isExternalStorageManager()) {
-				Intent it = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-					Uri.parse("package:" + BuildConfig.APPLICATION_ID));
-				ActivityCompat.startActivityForResult(this, it, REQUEST_STORAGE_ACCESS, null);
+			if (externalStorageManager && !Environment.isExternalStorageManager()) {
+				Intent it = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:" + BuildConfig.APPLICATION_ID));
+				ActivityCompat.startActivityForResult(activity, it, REQUEST_STORAGE_ACCESS, null);
 			}
 		}
+	}
+
+	private void init_system() {
+		String[] perms = new String[]{
+			Manifest.permission.READ_EXTERNAL_STORAGE,
+			Manifest.permission.WRITE_EXTERNAL_STORAGE,
+		};
+		sys_permisson_request(this, perms, true);
 	}
 
 	private void update() {

@@ -1,7 +1,7 @@
 /** netmill: dns-server: start DNS server
 2023, Simon Zolin */
 
-#include <netmill.h>
+#include <netmill-dns.h>
 #include <util/ipaddr.h>
 #include <util/ssl.h>
 #include <util/util.h>

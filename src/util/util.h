@@ -22,6 +22,7 @@ static inline const void* nml_if_map_find(const struct nml_if_map *map, uint n, 
 
 #ifdef FF_LINUX
 
+#include <sys/ioctl.h>
 #include <net/if.h>
 
 static inline int ffnetconf_if_index(ffstr name)

@@ -11,6 +11,9 @@ EXE := netmill$(DOTEXE)
 APP_DIR := netmill-0
 
 CFLAGS := -std=c99
+ifeq "$(SYS)" "android"
+	CFLAGS := -std=c11
+endif
 CFLAGS += -Wall -Wextra -Wno-unused-parameter -Wno-sign-compare -Wno-multichar
 ifeq "$(COMPILER)" "gcc"
 	CFLAGS += -Wno-nonnull -Wno-array-bounds -Wno-stringop-overflow

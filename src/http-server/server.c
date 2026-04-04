@@ -1,7 +1,7 @@
 /** netmill: http-server: server
 2023, Simon Zolin */
 
-#include <netmill.h>
+#include <netmill-http.h>
 #include <util/kq.h>
 #include <util/kcq.h>
 #include <util/kq-kcq.h>
@@ -89,6 +89,33 @@ static void sv_conf_init(struct nml_http_server_conf *conf)
 	conf->debug_data_dump_len = 80;
 }
 
+static nml_wrk* htsv_worker(nml_http_server *s)
+{
+	struct nml_http_server_conf *hc = &s->conf;
+	nml_wrk *w = hc->server.wif->create(&hc->core);
+	struct nml_wrk_conf wc = {
+		.opaque = s,
+
+		.log_level = hc->log_level,
+		.log = hc->log,
+		.log_obj = hc->log_obj,
+		.log_ctx = "http-sv",
+		.log_date_buffer = hc->log_date_buffer,
+
+		.kcq_sq = hc->kcq_sq,
+		.kcq_sq_sem = hc->kcq_sq_sem,
+
+		.timer_interval_msec = hc->server.timer_interval_msec,
+		.events_num = hc->server.events_num,
+		.max_connections = hc->server.max_connections,
+	};
+	if (hc->server.wif->conf(w, &wc)) {
+		hc->server.wif->free(w);
+		return NULL;
+	}
+	return w;
+}
+
 int nml_http_server_conf(nml_http_server *s, struct nml_http_server_conf *conf)
 {
 	if (!s) {
@@ -102,28 +129,11 @@ int nml_http_server_conf(nml_http_server *s, struct nml_http_server_conf *conf)
 
 	s->conf = *conf;
 
-	s->wrk = s->conf.server.wif->create(&s->conf.core);
-	struct nml_wrk_conf wc = {
-		.opaque = s,
-
-		.log_level = conf->log_level,
-		.log = conf->log,
-		.log_obj = conf->log_obj,
-		.log_ctx = "http-sv",
-		.log_date_buffer = conf->log_date_buffer,
-
-		.kcq_sq = conf->kcq_sq,
-		.kcq_sq_sem = conf->kcq_sq_sem,
-
-		.timer_interval_msec = conf->server.timer_interval_msec,
-		.events_num = conf->server.events_num,
-		.max_connections = conf->server.max_connections,
-	};
-	if (s->conf.server.wif->conf(s->wrk, &wc))
-		return -1;
-
 	s->conf.on_complete = sv_on_complete;
-	s->conf.boss = s->wrk;
+	if (!s->conf.boss
+		&& !(s->conf.boss = htsv_worker(s)))
+		return -1;
+	s->wrk = s->conf.boss;
 
 	struct nml_tcp_listener_conf lc;
 	s->conf.server.lsif->conf(NULL, &lc);

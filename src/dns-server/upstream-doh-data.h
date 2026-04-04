@@ -1,4 +1,6 @@
 
+#include <netmill-http.h>
+
 /** Data shared between dns-sv.upstream_doh and http-htcl.doh components */
 struct nml_doh {
 	nml_dns_sv_conn *dns_conn;

@@ -2,7 +2,6 @@
 2023, Simon Zolin */
 
 #include <dns-server/conn.h>
-#include <ffbase/map.h>
 #include <ffsys/perf.h>
 #include <ffsys/file.h>
 
@@ -27,270 +26,15 @@ do { \
 		conf->log(conf->log_obj, NML_LOG_DEBUG, "hosts", NULL, __VA_ARGS__); \
 } while (0)
 
-enum TYPE {
-	T_BLOCK = 1, // block domain and its subdomains
-	T_PASS = 2, // pass domain and its subdomains
-	T_IPV4 = 4, // assign IPv4 address to domain
-	T_IPV6 = 8, // assign IPv6 address to domain
-};
-
-#pragma pack(push)
-#pragma pack(4)
-struct entry {
-	const char *host_ptr; // -> source.data
-	ushort host_len;
-	ushort type; // enum TYPE
-};
-
-struct entry_ip {
-	const char *host_ptr;
-	ushort host_len;
-	ushort type; // enum TYPE
-	u_char ip[16]; // for T_IPV4 and T_IPV6
-};
-#pragma pack(pop)
-
 struct source {
 	ffstr	name; // NULL-terminated
 	fftime	mtime;
 	ffvec	data; // char[]
-	ffvec	entries; // struct entry[]
-	ffvec	entries_ip; // struct entry_ip[]
+	ffvec	entries; // struct hosts_entry[]
+	ffvec	entries_ip; // struct hosts_entry_ip[]
 };
 
-static ffstr entry_host(const struct entry *ent)
-{
-	ffstr host = FFSTR_INITN(ent->host_ptr, ent->host_len);
-	return host;
-}
-
-static int map_keyeq(void *opaque, const void *key, size_t keylen, void *val)
-{
-	(void)opaque;
-	struct entry *ent = (struct entry*)val;
-	ffstr host = entry_host(ent);
-	return ffstr_eq(&host, key, keylen);
-}
-
-/** Count the number of hosts */
-static uint source_count_hosts(const ffstr *data, uint *_n_ip)
-{
-	uint n = 0, n_ip = 0;
-	ffstr d = *data, ln, host, skip = FFSTR_INITZ(" \t\r");
-
-	while (d.len) {
-		ffstr_splitby(&d, '\n', &ln, &d);
-		int type = -1;
-
-		while (ln.len) {
-
-			ffstr_skipany(&ln, &skip);
-			if (!ln.len)
-				break;
-			if (ln.ptr[0] == '#')
-				break; // skip comment
-			if (type < 0 && ln.ptr[0] == '!')
-				break; // skip comment
-
-			ffstr_splitbyany(&ln, " \t", &host, &ln);
-
-			if (type < 0) {
-				// detect line format
-				ffip6 ip;
-				if (!ffip4_parse((ffip4*)&ip, host.ptr, host.len)) {
-					type = T_IPV4;
-					continue;
-				} else if (!ffip6_parse(&ip, host.ptr, host.len)) {
-					type = T_IPV6;
-					continue;
-				}
-				type = T_BLOCK;
-			}
-
-			n++;
-			if (type == T_IPV4 || type == T_IPV6)
-				n_ip++;
-		}
-	}
-
-	*_n_ip = n_ip;
-	return n;
-}
-
-/** Add hosts them to a map.
-Syntax:
-  # comment
-  ! comment
-  BASE_HOST...
-  +BASE_HOST...
-  ||BASE_HOST^
-  IP EXACT_HOST...
-*/
-static int ds_source_parse(struct nml_dns_server_conf *conf, struct source *src, ffstr data)
-{
-	int rc = -1;
-	uint n = 0, n_ip;
-	ffvec entries = {};
-	ffvec entries_ip = {};
-	fftime tstart = fftime_monotonic();
-
-	n = source_count_hosts(&data, &n_ip);
-	DSC_DEBUG(conf, "source_count_hosts:%u", n);
-	if (ffmap_grow(&conf->hosts.index, n))
-		goto end;
-	ffvec_allocT(&entries, n - n_ip, struct entry);
-	ffvec_allocT(&entries_ip, n_ip, struct entry_ip);
-	n = 0;
-
-	ffstr d = data, ln, host, ipstr, skip = FFSTR_INITZ(" \t\r");
-
-	while (d.len) {
-		ffstr_splitby(&d, '\n', &ln, &d);
-		int type = -1;
-		ffip6 ipaddr;
-
-		while (ln.len) {
-
-			ffstr_skipany(&ln, &skip);
-			if (!ln.len)
-				break;
-			if (ln.ptr[0] == '#')
-				break; // skip comment
-			if (type < 0 && ln.ptr[0] == '!')
-				break; // skip comment
-
-			ffstr_splitbyany(&ln, " \t", &host, &ln);
-
-			if (type < 0) {
-				// detect line format
-
-				if (host.len > 3
-					&& host.ptr[0] == '|' && host.ptr[1] == '|' && host.ptr[host.len-1] == '^') {
-
-					type = 0x0100 | T_BLOCK;
-					host.ptr += 2;
-					host.len -= 3;
-
-				} else if (!ffip4_parse((ffip4*)&ipaddr, host.ptr, host.len)) {
-					ipstr = host;
-					type = T_IPV4;
-					continue; // the first field is an IP
-
-				} else if (!ffip6_parse(&ipaddr, host.ptr, host.len)) {
-					ipstr = host;
-					type = T_IPV6;
-					continue; // the first field is an IP
-
-				} else {
-					type = T_BLOCK;
-					if (host.ptr[0] == '+') {
-						ffstr_shift(&host, 1);
-						type = T_PASS;
-					}
-				}
-
-			} else if (type == T_IPV4 || type == T_IPV6) {
-
-			} else if (type == T_BLOCK) {
-				if (host.ptr[0] == '+') {
-					ffstr_shift(&host, 1);
-					type = T_PASS;
-				}
-
-			} else if (type == T_PASS) {
-				if (host.ptr[0] != '+') {
-					type = T_BLOCK;
-				}
-
-			} else {
-				DSC_WARN(conf, "unexpected value %S", &host);
-				break;
-			}
-
-			if (0 > ffdns_isdomain(host.ptr, host.len)) {
-				DSC_VERBOSE(conf, "invalid host name: %S", &host);
-				continue;
-			}
-
-			ffstr_lower(&host);
-
-			uint hash = ffmap_hash(host.ptr, host.len);
-			struct entry *old, *ent;
-			old = ffmap_find_hash(&conf->hosts.index, hash, host.ptr, host.len, NULL);
-			if (old != NULL) {
-
-				if (type != T_IPV4 && old->type == T_IPV4) {
-					// "IP host" rule has higher priority than "host" rule
-					DSC_VERBOSE(conf, "skipping (higher priority rule exists) %S: %u"
-						, &host, old->type);
-					continue;
-				}
-
-				ffmap_rm_hash(&conf->hosts.index, hash, old);
-
-				DSC_VERBOSE(conf, "overwriting %S: %u"
-					, &host, type & 0xff);
-			}
-
-			if (type == T_IPV4 || type == T_IPV6)
-				ent = (struct entry*)_ffvec_push(&entries_ip, sizeof(struct entry_ip));
-			else
-				ent = _ffvec_push(&entries, sizeof(struct entry));
-
-			ent->type = type & 0xff;
-			ent->host_ptr = host.ptr;
-			ent->host_len = host.len;
-
-			if (type == T_IPV4) {
-				struct entry_ip *ent_ip = (struct entry_ip*)ent;
-				*(uint*)ent_ip->ip = *(uint*)&ipaddr;
-
-			} else if (type == T_IPV6) {
-				struct entry_ip *ent_ip = (struct entry_ip*)ent;
-				ffmem_copy(ent_ip->ip, &ipaddr, 16);
-			}
-
-			ffmap_add_hash(&conf->hosts.index, hash, ent);
-			n++;
-
-			if (type & T_BLOCK) {
-				DSC_DEBUG(conf, "block %S [%L]"
-					, &host, conf->hosts.index.len);
-			} else if (type == T_PASS) {
-				DSC_DEBUG(conf, "pass %S [%L]"
-					, &host, conf->hosts.index.len);
-			} else {
-				DSC_DEBUG(conf, "%S -> %S [%L]"
-					, &host, &ipstr, conf->hosts.index.len);
-			}
-		}
-	}
-
-	fftime tstop = fftime_monotonic();
-	fftime_sub(&tstop, &tstart);
-	DSC_INFO(conf, "added %u from %s (%ums)"
-		, n, src->name.ptr, (uint)fftime_to_msec(&tstop));
-	if (ff_unlikely(conf->log_level >= NML_LOG_DEBUG))
-		_ffmap_stats(&conf->hosts.index, 0);
-
-	ffvec_free(&src->entries);
-	ffvec_free(&src->entries_ip);
-	src->entries = entries;
-	src->entries_ip = entries_ip;
-
-	fffileinfo fi;
-	if (!fffile_info_path(src->name.ptr, &fi))
-		src->mtime = fffileinfo_mtime(&fi);
-
-	rc = 0;
-
-end:
-	if (rc != 0) {
-		ffvec_free(&entries);
-		ffvec_free(&entries_ip);
-	}
-	return 0;
-}
+#include <hosts-base.h>
 
 /** Read hosts from file */
 static int ds_source_read(struct nml_dns_server_conf *conf, struct source *src)
@@ -302,8 +46,34 @@ static int ds_source_read(struct nml_dns_server_conf *conf, struct source *src)
 		goto err;
 	}
 
-	if (ds_source_parse(conf, src, *(ffstr*)&data))
-		goto err;
+	fftime tstart = fftime_monotonic();
+
+	uint fmt = hosts_format(*(ffstr*)&data);
+
+	ffvec ents = {};
+	uint n;
+	if (fmt & T_IPV4) {
+		n = hosts_read_ip(&conf->hosts.hosts, &ents, *(ffstr*)&data, conf->log, conf->log_obj);
+		ffvec_free(&src->entries_ip);
+		src->entries_ip = ents;
+	} else {
+		n = hosts_read(&conf->hosts.hosts, &ents, *(ffstr*)&data, conf->log, conf->log_obj);
+		ffvec_free(&src->entries);
+		src->entries = ents;
+	}
+
+	if (ff_unlikely(conf->log_level >= NML_LOG_DEBUG)) {
+		fftime tstop = fftime_monotonic();
+		fftime_sub(&tstop, &tstart);
+		DSC_INFO(conf, "added %u from %s (%ums)"
+			, n, src->name.ptr, (uint)fftime_to_msec(&tstop));
+
+		_ffmap_stats(&conf->hosts.hosts.index, 0);
+	}
+
+	fffileinfo fi;
+	if (!fffile_info_path(src->name.ptr, &fi))
+		src->mtime = fffileinfo_mtime(&fi);
 
 	ffvec_free(&src->data);
 	src->data = data;
@@ -326,34 +96,21 @@ static int ds_hosts_find(struct nml_dns_server_conf *conf, const ffdns_question 
 	ffstr_set2(&name, &q->name);
 	ffstr_rskipchar1(&name, '.');
 
-	int subdomain_match = 0;
-	struct entry *ent;
-	for (;;) {
-		ent = ffmap_find(&conf->hosts.index, name.ptr, name.len, NULL);
-		if (ent) {
-			// "127.0.0.1 host.com" must not match "sub.host.com"
-			if (!(subdomain_match
-				&& (ent->type == T_IPV4 || ent->type == T_IPV6)))
-				break;
-		}
-		// "a.b.c" -> "b.c"
-		if (0 > ffstr_splitby(&name, '.', NULL, &name))
-			break;
-		subdomain_match = 1;
-	}
+	uint subdomain_match;
+	const struct hosts_entry *ent = hosts_find(&conf->hosts.hosts, name, &subdomain_match);
 	if (!ent) {
-		conf->hosts.misses++;
+		conf->stat.hosts.misses++;
 		return -1;
 	}
 
 	int t = ent->type & (T_BLOCK | T_PASS);
 	if (!subdomain_match && ent->type == T_IPV4 && q->type == FFDNS_A) {
-		const struct entry_ip *ent_ip = (struct entry_ip*)ent;
+		const struct hosts_entry_ip *ent_ip = (struct hosts_entry_ip*)ent;
 		ffmem_copy(ip, ent_ip->ip, 4);
 		t = T_IPV4;
 
 	} else if (!subdomain_match && ent->type == T_IPV6 && q->type == FFDNS_AAAA) {
-		const struct entry_ip *ent_ip = (struct entry_ip*)ent;
+		const struct hosts_entry_ip *ent_ip = (struct hosts_entry_ip*)ent;
 		ffmem_copy(ip, ent_ip->ip, 16);
 		t = T_IPV6;
 
@@ -362,11 +119,11 @@ static int ds_hosts_find(struct nml_dns_server_conf *conf, const ffdns_question 
 	}
 
 	if (t == 0) {
-		conf->hosts.misses++;
+		conf->stat.hosts.misses++;
 		return -1;
 	}
 
-	conf->hosts.hits++;
+	conf->stat.hosts.hits++;
 	DSC_DEBUG(conf, "%S matches rule %S/%u"
 		, &name, &q->name, ent->type);
 
@@ -391,33 +148,33 @@ int nml_dns_hosts_find(struct nml_dns_server_conf *conf, ffstr name, ffip6 *ip)
 /** Add existing hosts to a map */
 static int ds_source_addhosts(struct nml_dns_server_conf *conf, struct source *src)
 {
-	if (ffmap_grow(&conf->hosts.index, src->entries.len))
+	if (ffmap_grow(&conf->hosts.hosts.index, src->entries.len))
 		return -1;
 
-	struct entry *ent;
+	struct hosts_entry *ent;
 	FFSLICE_WALK(&src->entries, ent) {
 		ffstr host = entry_host(ent);
 		uint hash = ffmap_hash(host.ptr, host.len);
-		void *val = ffmap_find_hash(&conf->hosts.index, hash, host.ptr, host.len, NULL);
+		void *val = ffmap_find_hash(&conf->hosts.hosts.index, hash, host.ptr, host.len, NULL);
 		if (val) {
 			DSC_VERBOSE(conf, "overwriting the existing entry for %S", &host);
-			ffmap_rm_hash(&conf->hosts.index, hash, val);
+			ffmap_rm_hash(&conf->hosts.hosts.index, hash, val);
 		}
 
-		ffmap_add_hash(&conf->hosts.index, hash, ent);
+		ffmap_add_hash(&conf->hosts.hosts.index, hash, ent);
 	}
 
-	struct entry_ip *ent_ip;
+	struct hosts_entry_ip *ent_ip;
 	FFSLICE_WALK(&src->entries_ip, ent_ip) {
-		ffstr host = entry_host((struct entry*)ent_ip);
+		ffstr host = entry_host((struct hosts_entry*)ent_ip);
 		uint hash = ffmap_hash(host.ptr, host.len);
-		void *val = ffmap_find_hash(&conf->hosts.index, hash, host.ptr, host.len, NULL);
+		void *val = ffmap_find_hash(&conf->hosts.hosts.index, hash, host.ptr, host.len, NULL);
 		if (val) {
 			DSC_VERBOSE(conf, "overwriting the existing entry for %S", &host);
-			ffmap_rm_hash(&conf->hosts.index, hash, val);
+			ffmap_rm_hash(&conf->hosts.hosts.index, hash, val);
 		}
 
-		ffmap_add_hash(&conf->hosts.index, hash, ent_ip);
+		ffmap_add_hash(&conf->hosts.hosts.index, hash, ent_ip);
 	}
 
 	DSC_INFO(conf, "added %L from %s"
@@ -427,7 +184,7 @@ static int ds_source_addhosts(struct nml_dns_server_conf *conf, struct source *s
 
 static int ds_source_read_all(struct nml_dns_server_conf *conf)
 {
-	ffmap_init(&conf->hosts.index, map_keyeq);
+	hosts_init(&conf->hosts.hosts);
 
 	struct source *src;
 	FFSLICE_WALK(&conf->hosts.sources, src) {
@@ -440,10 +197,10 @@ static int ds_source_read_all(struct nml_dns_server_conf *conf)
 
 	size_t total = 0;
 	FFSLICE_WALK(&conf->hosts.sources, src) {
-		total += src->data.len + src->entries.len * sizeof(struct entry);
+		total += src->data.len + src->entries.len * sizeof(struct hosts_entry);
 	}
 	DSC_INFO(conf, "total:%LB/%L"
-		, total + conf->hosts.index.cap * sizeof(struct _ffmap_item), conf->hosts.index.len);
+		, total + conf->hosts.hosts.index.cap * sizeof(struct _ffmap_item), conf->hosts.hosts.index.len);
 	return 0;
 }
 
@@ -473,7 +230,7 @@ void nml_dns_hosts_refresh(struct nml_dns_server_conf *conf)
 	if (n == 0)
 		return; // nothing to update
 
-	ffmap_free(&conf->hosts.index);
+	hosts_destroy(&conf->hosts.hosts);
 	ds_source_read_all(conf);
 }
 
@@ -548,7 +305,7 @@ void nml_dns_hosts_init(struct nml_dns_server_conf *conf)
 
 void nml_dns_hosts_uninit(struct nml_dns_server_conf *conf)
 {
-	ffmap_free(&conf->hosts.index);
+	hosts_destroy(&conf->hosts.hosts);
 
 	struct source *src;
 	FFSLICE_WALK(&conf->hosts.sources, src) {

@@ -1,7 +1,7 @@
 /** netmill: dns-server: receive request
 2023, Simon Zolin */
 
-#include <netmill.h>
+#include <netmill-dns.h>
 
 extern void ds_run(nml_dns_sv_conn *c);
 

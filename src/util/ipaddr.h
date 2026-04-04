@@ -8,6 +8,8 @@ ffip4_mask
 ffip6_v4mapped
 ffip6_v4mapped_set
 ffip6_tov4
+ffip4_loopback ffip4_linklocal
+ffip4_public ffip6_public
 CONVERT
 	ffip4_parse ffip6_parse
 	ffip4_parse_subnet ffip6_parse_subnet
@@ -154,6 +156,48 @@ static inline ffuint ffip4_tostrz(const ffip4 *ip4, char *dst, ffsize cap)
 	return r;
 }
 
+static inline int ffip4_loopback(const ffip4 *ip4) { return (ip4->a[0] == 127); } // 127.x.x.x
+
+static inline int ffip4_linklocal(const ffip4 *ip4)
+{
+	return (*(ffuint*)ip4 & ffint_be_cpu32(0xffff0000)) == ffint_be_cpu32(0xa9fe0000); // 169.254.x.x
+}
+
+static inline int ffip4_public(const ffip4 *ip4)
+{
+	const u_char *a = (u_char*)ip4;
+	ffuint a24 = (*(ffuint*)a & ffint_be_cpu32(0xffffff00));
+	switch (a[0]) {
+	case 0:		return 0;
+	case 10:	return 0; // private network
+	case 127:	return 0; // loopback
+
+	case 172:
+		if (a[1] >= 16 && a[1] <= 31)
+			return 0; // private network
+		break;
+
+	case 192:
+		if (a24 == ffint_be_cpu32(0xc0000000) // 192.0.0.x, private network
+			|| a[1] == 168 // 192.168.x.x, private network
+			|| a24 == ffint_be_cpu32(0xc0000200) // 192.0.2.x
+			|| a24 == ffint_be_cpu32(0xc0586300)) // 192.88.99.x
+			return 0;
+		break;
+
+	default:
+		if (*(ffuint*)a == 0xffffffff // 255.255.255.255, subnet
+			|| (*(ffuint*)a & ffint_be_cpu32(0xffff0000)) == ffint_be_cpu32(0xa9fe0000) // 169.254.x.x, link-local
+			|| a24 == ffint_be_cpu32(0xc6121300) // 198.18.19.x, private network
+			|| a24 == ffint_be_cpu32(0xc6336400) // 198.51.100.x
+			|| a24 == ffint_be_cpu32(0xcb007100) // 203.0.113.x
+			|| a24 == ffint_be_cpu32(0xe0000000)) // 224.0.0.x, multicast
+			return 0;
+	}
+
+	return 1;
+}
+
 
 typedef struct { char a[16]; } ffip6;
 
@@ -162,7 +206,7 @@ typedef struct { char a[16]; } ffip6;
 /** Compare two IPv6 addresses */
 static inline int ffip6_cmp(const ffip6 *ip1, const ffip6 *ip2)
 {
-	return memcmp(ip1, ip2, sizeof(*ip1));
+	return ffmem_cmp(ip1, ip2, sizeof(*ip1));
 }
 
 static inline ffbool ffip6_isany(const ffip6 *ip)
@@ -354,6 +398,20 @@ static inline ffuint ffip6_tostrz(const ffip6 *ip6, char *dst, ffsize cap)
 		return 0;
 	dst[r] = '\0';
 	return r;
+}
+
+static inline int ffip6_public(const ffip6 *ip6)
+{
+	const u_char *a = (u_char*)ip6;
+	if (!*(ffuint64*)a && !*(ffuint*)(a+8) && !*(ffuint*)(a+12)) // ::
+		return 0;
+	if (!*(ffuint64*)a && !*(ffuint*)(a+8) && *(ffuint*)(a+12) == ffint_be_cpu32(1)) // ::1
+		return 0;
+	if (a[0] == 0xfe && (a[1] & 0xc0) == 0x80) // fe80::/10
+		return 0;
+	if (*(ffuint*)(a) == ffint_be_cpu32(0xff020000) && !*(ffuint*)(a+4) && !*(ffuint*)(a+8) && *(ffuint*)(a+12) == ffint_be_cpu32(1)) // ff02::1
+		return 0;
+	return 1;
 }
 
 /** Convert IPv4 or IPv6 address to string.
