@@ -127,6 +127,7 @@ Command:\n\
   `ping`          XDP ping\n\
   `req`           Execute HTTP request\n\
   `service`       Install system service\n\
+  `socks`         Start SOCKS server\n\
 \n\
 \"netmill COMMAND help\" will print details on each command.\n\
 ");
@@ -351,6 +352,7 @@ static const nml_operation_if* op_provide(const char *op)
 	else if (ffsz_eq(op, "if")) op = "if.if";
 	else if (ffsz_eq(op, "ping")) op = "firewall.ping";
 	else if (ffsz_eq(op, "req")) op = "http.req";
+	else if (ffsz_eq(op, "socks")) op = "socks.server";
 	return exe_provide(op);
 }
 

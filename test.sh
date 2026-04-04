@@ -8,6 +8,7 @@ TESTS=(
 		http_proxy https_proxy
 	dns_local dns_upstream
 	# dns_doh
+	# socks
 	cert
 	if
 )
@@ -319,6 +320,15 @@ test_dns_doh() {
 	test_interrupt_pid__filename nml.pid
 }
 
+test_socks() {
+	./netmill http  listen 8080  www . &
+	echo $! >nml.pid
+
+	./netmill $DEBUG socks  threads 1  allow
+
+	test_interrupt_pid__filename nml.pid
+}
+
 test_cert() {
 	./netmill cert generate \
 		subject CN=netmill.test \
@@ -338,8 +348,8 @@ test_clean() {
 
 mkdir -p nmltest
 rm -rf nmltest/*
-killall -9 netmill || true
-killall -9 nc || true
+# killall -9 netmill || true
+# killall -9 nc || true
 
 for cmd in "${CMDS[@]}" ; do
 

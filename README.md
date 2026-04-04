@@ -9,6 +9,7 @@ Current features:
 * HTTP/1.1 Server: SSL, local files, auto-index, virtual space, forward proxy (HTTP and tunelling), gzip
 * HTTP/1.1 Client: SSL, gzip
 * DNS Server: hosts lists, hosts block lists, upstream servers (UDP, DoH), persistent cache
+* SOCKS5 Server: TCP-connect
 * X509 Certificate Generator
 * Ingress Firewall (XDP/Linux)
 * ping (XDP/Linux)
@@ -20,6 +21,7 @@ Contents:
 	* [HTTP Server](#http-server)
 	* [HTTP Client](#http-client)
 	* [DNS Server](#dns-server)
+	* [SOCKS Server](#socks-server)
 	* [Ingress Firewall](#ingress-firewall)
 	* [XDP ping](#xdp-ping)
 	* [Certificate Generator](#certificate-generator)
@@ -40,6 +42,7 @@ Contents:
 | HTTP Server +SSL        | ✅ | ✅ | ❌ |
 | HTTP Client             | ✅ | ✅ | ❌ |
 | DNS Server              | ✅ | ✅ | ❌ |
+| SOCKS5 Server           | ✅ | ✅ | ❌ |
 | Certificate Generator   | ✅ | ✅ | ❌ |
 | Show Network Interfaces | ✅ | ✅ | ❌ |
 | Ingress Firewall        | ✅ | ❌ | ❌ |
@@ -202,6 +205,20 @@ sudo systemctl start netmill
 sudo systemctl status netmill
 sudo systemctl enable netmill
 ```
+
+
+## SOCKS Server
+
+Examples:
+
+```sh
+# Start SOCKS5 server
+netmill socks
+```
+
+Features:
+
+* TCP-connection mode only
 
 
 ## Ingress Firewall

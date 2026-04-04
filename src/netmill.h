@@ -80,6 +80,7 @@ typedef struct nml_component nml_component;
 typedef struct nml_http_sv_component nml_http_sv_component;
 typedef struct nml_http_cl_component nml_http_cl_component;
 typedef struct nml_dns_component nml_dns_component;
+typedef struct nml_socks_sv_component nml_socks_sv_component;
 struct nml_component {
 	/**
 	Return enum NMLR_R */

@@ -61,6 +61,7 @@ include $(NETMILL)/src/firewall/Makefile
 include $(NETMILL)/src/gzip/Makefile
 include $(NETMILL)/src/http-client/Makefile
 include $(NETMILL)/src/http-server/Makefile
+include $(NETMILL)/src/socks-server/Makefile
 include $(NETMILL)/src/ssl/Makefile
 
 
