@@ -85,6 +85,7 @@ struct nml_component {
 	Return enum NMLR_R */
 	int (*open)(void *c);
 
+	/** Optional */
 	void (*close)(void *c);
 
 	/**

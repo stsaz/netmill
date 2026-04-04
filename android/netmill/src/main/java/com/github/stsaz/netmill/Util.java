@@ -1,4 +1,4 @@
-/** netmill
+/** netmill/Android
 2022, Simon Zolin */
 
 package com.github.stsaz.netmill;
@@ -8,7 +8,7 @@ import androidx.core.content.ContextCompat;
 import java.io.File;
 import java.util.ArrayList;
 
-class UtilJava {
+class Util {
 
 	static String int_to_str(int v) {
 		return String.format("%d", v);
@@ -78,7 +78,7 @@ class UtilJava {
 	}
 }
 
-abstract class UtilAndroid extends UtilJava {
+abstract class UtilAndroid extends Util {
 	static String TAG;
 
 	abstract void errlog(String mod, String fmt, Object... args);

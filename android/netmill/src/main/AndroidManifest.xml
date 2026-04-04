@@ -33,6 +33,22 @@
 				android:value="com.github.stsaz.netmill.MainActivity" />
 		</activity>
 
+		<activity android:name=".LogsActivity"
+			android:exported="false"
+			android:label="@string/title_activity_logs">
+			<meta-data
+				android:name="android.support.PARENT_ACTIVITY"
+				android:value="com.github.stsaz.netmill.MainActivity" />
+		</activity>
+
+		<activity android:name=".HostsActivity"
+			android:exported="false"
+			android:label="@string/title_activity_hosts">
+			<meta-data
+				android:name="android.support.PARENT_ACTIVITY"
+				android:value="com.github.stsaz.netmill.MainActivity" />
+		</activity>
+
 		<activity android:name=".AboutActivity"
 			android:exported="false"
 			android:label="About netmill">

@@ -2,6 +2,7 @@
 2023, Simon Zolin */
 
 #include <ffbase/map.h>
+#include <util/dns.h>
 
 enum TYPE {
 	T_BLOCK = 1, // block domain and its subdomains
@@ -154,6 +155,17 @@ int hosts_add(struct hosts *h, struct hosts_entry *he, ffstr host, struct hosts_
 
 	ffmap_add_hash(&h->index, hash, he);
 	return r;
+}
+
+struct hosts_entry* hosts_del(struct hosts *h, ffstr host)
+{
+	uint hash = ffmap_hash(host.ptr, host.len);
+	struct hosts_entry *ent;
+	if ((ent = ffmap_find_hash(&h->index, hash, host.ptr, host.len, NULL))) {
+		ffmap_rm_hash(&h->index, hash, ent);
+		return ent;
+	}
+	return NULL;
 }
 
 /** Add hosts to a hash table.

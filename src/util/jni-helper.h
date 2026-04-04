@@ -15,17 +15,21 @@ String:
 Arrays:
 	jni_arr_len
 	jni_bytes_jba jni_bytes_free
+	jni_jia_vec
 	jni_joa
 	jni_joa_i jni_joa_i_set
 	jni_jsa_sza
-	jni_str_jba
+	jni_str_jba jni_jba_str
+	jni_stra_jsa jni_stra_free
 Object:
 	jni_obj_new
 	jni_obj_jo jni_obj_jo_set
 	jni_obj_sz_set jni_obj_sz_setf
+	jni_obj_jba_set
 	jni_obj_long jni_obj_long_set
 	jni_obj_int jni_obj_int_set
 	jni_obj_bool jni_obj_bool_set
+	jni_obj_read jni_obj_write
 Functions:
 	jni_func jni_call_void
 	jni_sfunc jni_scall_void jni_scall_bool
@@ -48,6 +52,7 @@ Notes:
 #define JNI_TINT "I"
 #define JNI_TLONG "J"
 #define JNI_TBOOL "Z"
+#define JNI_TBYTE "B"
 #define JNI_TARR "["
 #define JNI_TVOID "V"
 
@@ -83,6 +88,17 @@ static inline int jni_vm_attach_once(JavaVM *jvm, JNIEnv **env, int *attached, i
 #define jni_class(C) \
 	(*env)->FindClass(env, C)
 
+struct jni_class_t {
+	jclass cls;
+	jmethodID init; // = jni_func(cls, "<init>", "()V")
+};
+
+static inline void jni_class_set(JNIEnv *env, struct jni_class_t *c, const char *cname)
+{
+	c->cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, cname));
+	c->init = (*env)->GetMethodID(env, c->cls, "<init>", "()V");
+}
+
 /** jclass = typeof(obj) */
 #define jni_class_obj(jobj) \
 	(*env)->GetObjectClass(env, jobj)
@@ -103,6 +119,9 @@ T: JNI_T... */
 
 #define jni_field_bool(jclazz, name) \
 	(*env)->GetFieldID(env, jclazz, name, JNI_TBOOL)
+
+#define jni_field_jba(jclazz, name) \
+	(*env)->GetFieldID(env, jclazz, name, JNI_TARR JNI_TBYTE)
 
 
 
@@ -142,6 +161,20 @@ do { \
 #define jni_bytes_free(ptr, jab) \
 	(*env)->ReleaseByteArrayElements(env, jab, (jbyte*)(ptr), 0)
 
+/** byte[] = ffstr */
+static inline jbyteArray jni_jba_str(JNIEnv *env, ffstr str) {
+	jbyteArray jba = (*env)->NewByteArray(env, str.len);
+	(*env)->SetByteArrayRegion(env, jba, 0, str.len, (jbyte*)str.ptr);
+	return jba;
+}
+
+/** int[] = ffslice */
+static inline jintArray jni_jia_vec(JNIEnv *env, ffslice v) {
+	jintArray jia = (*env)->NewIntArray(env, v.len);
+	(*env)->SetIntArrayRegion(env, jia, 0, v.len, (jint*)v.ptr);
+	return jia;
+}
+
 /** jobjectArray = new */
 #define jni_joa(cap, jclazz) \
 	(*env)->NewObjectArray(env, cap, jclazz, NULL)
@@ -176,6 +209,35 @@ static inline jobjectArray jni_jsa_sza(JNIEnv *env, char **asz, ffsize n)
 	return jas;
 }
 
+/** ffstr[] = String[]
+Free with jni_stra_free(). */
+static inline ffvec jni_stra_jsa(JNIEnv *env, jobjectArray jsa)
+{
+	ffvec v = {};
+	uint n = jni_arr_len(jsa);
+	ffvec_allocT(&v, n, ffstr);
+	for (uint i = 0;  i < n;  i++) {
+		jstring js = jni_joa_i(jsa, i);
+		const char *sz = jni_sz_js(js);
+
+		ffstr *it = ffvec_pushT(&v, ffstr);
+		ffstr_dupz(it, sz);
+
+		jni_sz_free(sz, js);
+		jni_local_unref(js);
+	}
+	return v;
+}
+
+static inline void jni_stra_free(ffvec *v)
+{
+	ffstr *it;
+	FFSLICE_WALK(v, it) {
+		ffstr_free(it);
+	}
+	ffvec_free(v);
+}
+
 
 /** object = new */
 #define jni_obj_new(jc, ...) \
@@ -205,6 +267,13 @@ static inline void jni_obj_sz_setf(JNIEnv *env, jobject jo, jfieldID jf, const c
 	va_end(va);
 	jni_obj_sz_set(env, jo, jf, sz);
 	ffmem_free(sz);
+}
+
+/** obj.byte[] = ffstr */
+static inline void jni_obj_jba_set(JNIEnv *env, jobject jo, jfieldID jf, ffstr data) {
+	jbyteArray jba = jni_jba_str(env, data);
+	jni_obj_jo_set(jo, jf, jba);
+	jni_local_unref(jba);
 }
 
 /** long = obj.long */
@@ -257,3 +326,80 @@ class C {
 
 #define jni_scall_bool(jclazz, jfunc, ...) \
 	(*env)->CallStaticBooleanMethod(env, jclazz, jfunc, ##__VA_ARGS__)
+
+
+struct jni_cmap {
+	char name[16];
+	uint type :8;
+	uint off :24;
+	jfieldID field_id;
+};
+
+static inline void jni_obj_fields(JNIEnv *env, struct jni_cmap *map, jclass cls)
+{
+	for (struct jni_cmap *it = map;  *it->name;  it++) {
+		const char *t = (it->type == 'i') ? JNI_TINT
+			: (it->type == 'l') ? JNI_TLONG
+			: (it->type == 'z') ? JNI_TBOOL
+			: (it->type == 's') ? JNI_TSTR
+			: (it->type == 'S') ? JNI_TARR JNI_TSTR
+			: "";
+		it->field_id = (*env)->GetFieldID(env, cls, it->name, t);
+	}
+}
+
+/** C.obj = Java.obj */
+static inline void jni_obj_read(JNIEnv *env, void *dst, struct jni_cmap *map, jobject src, jclass cls)
+{
+	if (!map->field_id)
+		jni_obj_fields(env, map, cls);
+
+	for (const struct jni_cmap *it = map;  *it->name;  it++) {
+		void *ptr = (char*)dst + it->off;
+		if (it->type == 'i')
+			*(jint*)ptr = jni_obj_int(src, it->field_id);
+		else if (it->type == 'l')
+			*(jlong*)ptr = jni_obj_long(src, it->field_id);
+		else if (it->type == 'z')
+			*(jlong*)ptr = jni_obj_bool(src, it->field_id);
+		else
+			*(jobject*)ptr = jni_obj_jo(src, it->field_id);
+	}
+}
+
+/** Java.obj = C.obj */
+static inline void jni_obj_write(JNIEnv *env, jobject dst, jclass cls, struct jni_cmap *map, const void *src)
+{
+	if (!map->field_id)
+		jni_obj_fields(env, map, cls);
+
+	union {
+		void *ptr;
+		jint *i;
+		jlong *l;
+		jboolean *z;
+		jobject *o;
+	} u;
+	for (const struct jni_cmap *it = map;  *it->name;  it++) {
+		u.ptr = (char*)src + it->off;
+		switch (it->type) {
+		case 'i':
+			if (*u.i)
+				jni_obj_int_set(dst, it->field_id, *u.i);
+			break;
+		case 'l':
+			if (*u.l)
+				jni_obj_long_set(dst, it->field_id, *u.l);
+			break;
+		case 'z':
+			if (*u.z)
+				jni_obj_bool_set(dst, it->field_id, *u.z);
+			break;
+		default:
+			if (*u.o) {
+				jni_obj_jo_set(dst, it->field_id, *u.o);
+				jni_local_unref(*u.o);
+			}
+		}
+	}
+}

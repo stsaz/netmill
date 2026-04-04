@@ -27,14 +27,14 @@
 				android:layout_marginHorizontal="10dp"
 				android:layout_marginTop="10dp"
 				android:textColor="@color/text" />
-			<EditText android:id="@+id/e_http_port"
+			<EditText android:id="@+id/eHttpPort"
 				android:layout_width="match_parent"
 				android:layout_height="wrap_content"
 				android:layout_marginHorizontal="10dp"
 				android:inputType="text"
 				android:textSize="@dimen/text_editbox" />
 
-			<androidx.appcompat.widget.SwitchCompat android:id="@+id/sw_http_local"
+			<androidx.appcompat.widget.SwitchCompat android:id="@+id/swHttpLocal"
 				android:layout_width="match_parent"
 				android:layout_height="wrap_content"
 				android:layout_margin="10dp"
@@ -46,7 +46,7 @@
 				android:layout_marginHorizontal="10dp"
 				android:layout_marginTop="10dp"
 				android:textColor="@color/text" />
-			<EditText android:id="@+id/e_http_local_path"
+			<EditText android:id="@+id/eHttpLocalPath"
 				android:layout_width="match_parent"
 				android:layout_height="wrap_content"
 				android:layout_marginHorizontal="10dp"

@@ -1,2 +1,5 @@
 -keep class com.github.stsaz.netmill.NetMill {*;}
 -keep class com.github.stsaz.netmill.NetMill$HttpServerOptions {*;}
+-keep class com.github.stsaz.netmill.NetMill$HttpStats {*;}
+-keep class com.github.stsaz.netmill.Conf {*;}
+-keep class com.github.stsaz.netmill.UtilNative {*;}

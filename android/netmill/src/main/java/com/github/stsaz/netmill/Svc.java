@@ -1,4 +1,4 @@
-/** netmill
+/** netmill/Android
 2023, Simon Zolin */
 
 package com.github.stsaz.netmill;

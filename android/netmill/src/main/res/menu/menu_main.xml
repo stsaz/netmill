@@ -8,6 +8,14 @@
 		android:title="@string/action_settings" />
 
 	<item
+		android:id="@+id/action_logs"
+		android:title="@string/show_logs" />
+
+	<item
+		android:id="@+id/action_hosts"
+		android:title="@string/show_hosts" />
+
+	<item
 		android:id="@+id/action_about"
 		android:title="@string/menu_about" />
 </menu>
