@@ -116,6 +116,7 @@ struct NetMill {
 static struct jni_cmap NetMill_map[] = {
 	_boolean(log_android),
 	_boolean(log_debug),
+	{}
 };
 #undef _boolean
 
@@ -179,11 +180,11 @@ Java_com_github_stsaz_netmill_NetMill_listIPAddresses(JNIEnv *env, jobject thiz,
 	FFSLICE_WALK(&nifs, pnif) {
 		struct ffnetconf_ifinfo *nif = *pnif;
 		for (uint i = 0;  i < nif->ip_n;  i++) {
-			const ffip6 *ip = nif->ip[i];
+			const ffip6 *ip = (ffip6*)nif->ip[i];
 
 			if (flags & IP_NOLOCAL) {
-				const ffip4 *ip4 = ffip6_v4mapped(ip);
-				if ((ip4 && ffip4_loopback(ip4) && ffip4_linklocal(ip4))
+				const ffip4 *ip4 = ffip6_tov4(ip);
+				if ((ip4 && (ffip4_loopback(ip4) || ffip4_linklocal(ip4)))
 					|| (!ip4 && !ffip6_public(ip)))
 					continue;
 			}

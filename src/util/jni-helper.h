@@ -361,7 +361,7 @@ static inline void jni_obj_read(JNIEnv *env, void *dst, struct jni_cmap *map, jo
 		else if (it->type == 'l')
 			*(jlong*)ptr = jni_obj_long(src, it->field_id);
 		else if (it->type == 'z')
-			*(jlong*)ptr = jni_obj_bool(src, it->field_id);
+			*(jboolean*)ptr = jni_obj_bool(src, it->field_id);
 		else
 			*(jobject*)ptr = jni_obj_jo(src, it->field_id);
 	}
