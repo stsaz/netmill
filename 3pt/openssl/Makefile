@@ -2,9 +2,10 @@
 
 include ../config.mk
 
-VER := 3.1.3
-URL := https://www.openssl.org/source/openssl-$(VER).tar.gz
+VER := 3.5.6
+URL := https://github.com/openssl/openssl/releases/download/openssl-$(VER)/openssl-$(VER).tar.gz
 PKG := $(NML_3PT)/openssl/$(notdir $(URL))
+SHA1 := 3dc26853ca7683237a869d01745dae48fb63ed82
 DIR := openssl-$(VER)
 LIB := libssl.so
 ifeq "$(OS)" "windows"
@@ -18,8 +19,7 @@ default: $(LIB)
 # download
 $(PKG):
 	$(CURL) -o $@ $(URL)
-	$(CURL) -o $@.sha1 $(URL).sha1
-# 	sha1sum -c $@.sha1
+	echo "$(SHA1) *$(PKG)" | sha1sum -c -
 
 # unpack
 $(DIR): $(PKG)
@@ -53,8 +53,6 @@ ifeq "$(OS)" "windows"
 	cd $(DIR) && $(STRIP) libcrypto-3-x64.dll libssl-3-x64.dll
 	cd $(DIR) && mv libcrypto-3-x64.dll libssl-3-x64.dll ..
 else ifeq "$(SYS)" "linux"
-	cd $(DIR) && ln -s libssl.so.3 libssl.so
-	cd $(DIR) && ln -s libcrypto.so.3 libcrypto.so
 	cd $(DIR) && $(STRIP) libcrypto.so.3 libssl.so.3
 	cd $(DIR) && mv libcrypto.so libssl.so libcrypto.so.3 libssl.so.3 ..
 else
