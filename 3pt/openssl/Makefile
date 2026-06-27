@@ -31,15 +31,12 @@ ifeq "$(CPU)" "amd64"
 	ifeq "$(SYS)" "android"
 		CONFIGURE_FLAGS := android-x86_64 -D__ANDROID_API__=$(A_API)
 	else ifeq "$(OS)" "windows"
-		CONFIGURE_FLAGS := mingw64
+		CONFIGURE_FLAGS := mingw64 --cross-compile-prefix=x86_64-w64-mingw32-
 	endif
 else ifeq "$(CPU)" "arm64"
 	ifeq "$(SYS)" "android"
 		CONFIGURE_FLAGS := android-arm64 -D__ANDROID_API__=$(A_API)
 	endif
-endif
-ifneq "$(CROSS_PREFIX)" ""
-	CONFIGURE_FLAGS += --cross-compile-prefix=$(CROSS_PREFIX)
 endif
 
 $(DIR)/Makefile: | $(DIR)
@@ -47,8 +44,8 @@ $(DIR)/Makefile: | $(DIR)
 
 # build
 $(LIB): $(DIR)/Makefile
-	cd $(DIR) && $(MAKE) LDFLAGS="$(LINK_RPATH_ORIGIN)" || true
-	cd $(DIR) && $(MAKE) LDFLAGS="$(LINK_RPATH_ORIGIN)" $@
+	cd $(DIR) && $(MAKE) LDFLAGS="$(LINK_RPATH_ORIGIN) $(LINKFLAGS_USER)" || true
+	cd $(DIR) && $(MAKE) LDFLAGS="$(LINK_RPATH_ORIGIN) $(LINKFLAGS_USER)" $@
 ifeq "$(OS)" "windows"
 	cd $(DIR) && $(STRIP) libcrypto-3-x64.dll libssl-3-x64.dll
 	cd $(DIR) && mv libcrypto-3-x64.dll libssl-3-x64.dll ..

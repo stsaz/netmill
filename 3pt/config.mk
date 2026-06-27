@@ -2,31 +2,23 @@
 
 include ../../ffbase/conf.mk
 
-CFLAGS := -fpic -fvisibility=hidden
-CFLAGS += -O3
-CXXFLAGS := $(CFLAGS)
+NML_CF += -fpic -fvisibility=hidden
+NML_CF += -O3
+CFLAGS += $(NML_CF)
+CXXFLAGS += $(NML_CF)
 
-LINKFLAGS = -fpic $(LINK_INSTALLNAME_LOADERPATH)
-LINKFLAGS += -s
-ifeq "$(COMPILER)" "gcc"
-	LINKFLAGS += -static-libgcc
-endif
-LINKXXFLAGS = $(LINKFLAGS)
-ifeq "$(COMPILER)" "gcc"
-	ifeq "$(OS)" "linux"
-		LINKXXFLAGS += -static-libstdc++
-	else
-		LINKXXFLAGS += -static
-	endif
-endif
+NML_LF := $(LINK_INSTALLNAME_LOADERPATH) -static-libgcc
+NML_LF += -s
+LINKFLAGS += $(NML_LF)
+LINKXXFLAGS += $(NML_LF) -static-libstdc++
 
-# Set compiler and append compiler & linker flags for Android
 SYS := $(OS)
 ifeq "$(SYS)" "android"
 	include ../android/andk.mk
-	CFLAGS += $(A_CFLAGS)
-	CXXFLAGS += $(A_CFLAGS)
-	LINKFLAGS += $(A_LINKFLAGS)
+	CFLAGS := $(NML_CF) $(A_CFLAGS)
+	CXXFLAGS := $(NML_CF) $(A_CFLAGS)
+	LINKFLAGS := $(NML_LF) $(A_LINKFLAGS)
+	LINKXXFLAGS := $(NML_LF) $(A_LINKFLAGS)
 endif
 
 CURL := curl -L
