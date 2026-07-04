@@ -1,6 +1,6 @@
 # Base settings for Makefile-s
 
-include ../../ffbase/conf.mk
+include $(NML_3PT)/../../ffbase/conf.mk
 
 NML_CF += -fpic -fvisibility=hidden
 NML_CF += -O3
