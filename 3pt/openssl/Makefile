@@ -13,6 +13,9 @@ ifeq "$(OS)" "windows"
 else ifeq "$(SYS)" "linux"
 	LIB := libssl.so.3
 endif
+ifeq "$(OS)" "linux"
+	LINK_RPATH_ORIGIN_ESC := '-Wl,-rpath,\$$\$$ORIGIN'
+endif
 
 default: $(LIB)
 
@@ -44,8 +47,8 @@ $(DIR)/Makefile: | $(DIR)
 
 # build
 $(LIB): $(DIR)/Makefile
-	cd $(DIR) && $(MAKE) LDFLAGS="$(LINK_RPATH_ORIGIN) $(LINKFLAGS_USER)" || true
-	cd $(DIR) && $(MAKE) LDFLAGS="$(LINK_RPATH_ORIGIN) $(LINKFLAGS_USER)" $@
+	cd $(DIR) && $(MAKE) LDFLAGS="$(LINK_RPATH_ORIGIN_ESC) $(LINKFLAGS_USER)" || true
+	cd $(DIR) && $(MAKE) LDFLAGS="$(LINK_RPATH_ORIGIN_ESC) $(LINKFLAGS_USER)" $@
 ifeq "$(OS)" "windows"
 	cd $(DIR) && $(STRIP) libcrypto-3-x64.dll libssl-3-x64.dll
 	cd $(DIR) && mv libcrypto-3-x64.dll libssl-3-x64.dll ..
