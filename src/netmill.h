@@ -7,7 +7,9 @@
 #include <ffsys/timerqueue.h>
 #include <ffsys/semaphore.h>
 #include <ffsys/queue.h>
+#ifdef FF_LINUX
 #include <ffsys/filemon.h>
+#endif
 #include <ffbase/time.h>
 #include <ffbase/vector.h>
 #include <ffbase/map.h>
