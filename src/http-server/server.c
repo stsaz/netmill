@@ -4,7 +4,9 @@
 #include <netmill-http.h>
 #include <util/kq.h>
 #include <util/kcq.h>
+#define dbglog(...)
 #include <util/kq-kcq.h>
+#undef dbglog
 #include <util/kq-timer.h>
 #include <util/kq-tq.h>
 #include <ffsys/perf.h>

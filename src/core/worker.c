@@ -6,7 +6,9 @@
 #include <util/kq-tq.h>
 #include <util/kq-timer.h>
 #include <util/kcq.h>
+#define dbglog(...)
 #include <util/kq-kcq.h>
+#undef dbglog
 #include <ffsys/perf.h>
 
 #define WK_SYSERR(w, ...) \
