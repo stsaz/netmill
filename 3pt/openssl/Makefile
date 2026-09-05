@@ -7,7 +7,7 @@ URL := https://github.com/openssl/openssl/releases/download/openssl-$(VER)/opens
 PKG := $(NML_3PT)/openssl/$(notdir $(URL))
 SHA1 := 3dc26853ca7683237a869d01745dae48fb63ed82
 DIR := openssl-$(VER)
-LIB := libssl.so
+LIB := libssl.$(SO)
 ifeq "$(OS)" "windows"
 	LIB := libssl-3-x64.dll
 else ifeq "$(SYS)" "linux"
@@ -22,7 +22,7 @@ default: $(LIB)
 # download
 $(PKG):
 	$(CURL) -o $@ $(URL)
-	echo "$(SHA1) *$(PKG)" | sha1sum -c -
+	echo "$(SHA1) *$(PKG)" | $(SHA1SUM) -c -
 
 # unpack
 $(DIR): $(PKG)
@@ -39,6 +39,8 @@ ifeq "$(CPU)" "amd64"
 else ifeq "$(CPU)" "arm64"
 	ifeq "$(SYS)" "android"
 		CONFIGURE_FLAGS := android-arm64 -D__ANDROID_API__=$(A_API)
+	else ifeq "$(OS)" "linux"
+		CONFIGURE_FLAGS := linux-aarch64 --cross-compile-prefix=aarch64-linux-gnu-
 	endif
 endif
 
@@ -55,7 +57,14 @@ ifeq "$(OS)" "windows"
 else ifeq "$(SYS)" "linux"
 	cd $(DIR) && $(STRIP) libcrypto.so.3 libssl.so.3
 	cd $(DIR) && mv libcrypto.so libssl.so libcrypto.so.3 libssl.so.3 ..
+else ifeq "$(OS)" "apple"
+	cd $(DIR) && install_name_tool -id @loader_path/libssl.dylib libssl.dylib
+	cd $(DIR) && install_name_tool -id @loader_path/libcrypto.dylib libcrypto.dylib
+	cd $(DIR) && install_name_tool -change /usr/local/lib/libcrypto.3.dylib @loader_path/libcrypto.dylib libssl.dylib
+	cd $(DIR) && install_name_tool -change /usr/local/lib/libssl.3.dylib @loader_path/libssl.dylib libcrypto.dylib
+	cd $(DIR) && $(STRIP) -x libcrypto.dylib libssl.dylib
+	cd $(DIR) && mv libcrypto.dylib libssl.dylib libcrypto.3.dylib libssl.3.dylib ..
 else
-	cd $(DIR) && $(STRIP) libcrypto.so libssl.so
-	cd $(DIR) && mv libcrypto.so libssl.so ..
+	cd $(DIR) && $(STRIP) libcrypto.$(SO) libssl.$(SO)
+	cd $(DIR) && mv libcrypto.$(SO) libssl.$(SO) ..
 endif

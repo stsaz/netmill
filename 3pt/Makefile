@@ -42,12 +42,3 @@ xdp: xdp-tools/lib/libxdp/libxdp.a
 xdp-clean:
 	cd xdp-tools/lib/libxdp && \
 		make clean
-
-
-hash:
-	sha1sum -b \
-		openssl/openssl-3.1.3.tar.gz \
-		>packages.sha1
-
-hash-check:
-	sha1sum -c packages.sha1 --ignore-missing
