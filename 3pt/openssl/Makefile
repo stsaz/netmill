@@ -32,13 +32,13 @@ $(DIR): $(PKG)
 CONFIGURE_FLAGS:=
 ifeq "$(CPU)" "amd64"
 	ifeq "$(SYS)" "android"
-		CONFIGURE_FLAGS := android-x86_64 -D__ANDROID_API__=$(A_API)
+		CONFIGURE_FLAGS := android-x86_64
 	else ifeq "$(OS)" "windows"
 		CONFIGURE_FLAGS := mingw64 --cross-compile-prefix=x86_64-w64-mingw32-
 	endif
 else ifeq "$(CPU)" "arm64"
 	ifeq "$(SYS)" "android"
-		CONFIGURE_FLAGS := android-arm64 -D__ANDROID_API__=$(A_API)
+		CONFIGURE_FLAGS := android-arm64
 	else ifeq "$(OS)" "linux"
 		CONFIGURE_FLAGS := linux-aarch64 --cross-compile-prefix=aarch64-linux-gnu-
 	endif
@@ -49,8 +49,8 @@ $(DIR)/Makefile: | $(DIR)
 
 # build
 $(LIB): $(DIR)/Makefile
-	cd $(DIR) && $(MAKE) LDFLAGS="$(LINK_RPATH_ORIGIN_ESC) $(LINKFLAGS_USER)" || true
-	cd $(DIR) && $(MAKE) LDFLAGS="$(LINK_RPATH_ORIGIN_ESC) $(LINKFLAGS_USER)" $@
+	cd $(DIR) && SOURCE_DATE_EPOCH=0 $(MAKE) LDFLAGS="$(LINK_RPATH_ORIGIN_ESC) $(LINKFLAGS_USER)" || true
+	cd $(DIR) && SOURCE_DATE_EPOCH=0 $(MAKE) LDFLAGS="$(LINK_RPATH_ORIGIN_ESC) $(LINKFLAGS_USER)" $@
 ifeq "$(OS)" "windows"
 	cd $(DIR) && $(STRIP) libcrypto-3-x64.dll libssl-3-x64.dll
 	cd $(DIR) && mv libcrypto-3-x64.dll libssl-3-x64.dll ..
